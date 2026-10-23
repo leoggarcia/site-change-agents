@@ -1,0 +1,21 @@
+[project]
+name = "change-agents"
+version = "0.1.0"
+description = "LangGraph agents for Site Change Agents: intake, coder, reviewer and project indexer"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.161.1",
+    "pydantic-settings>=2.16.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "change_agents"

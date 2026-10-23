@@ -1,0 +1,397 @@
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --border: #e4e4e0;
+  --text: #1c1c1a;
+  --muted: #66665f;
+  --accent: #2f5bd3;
+  --accent-text: #ffffff;
+  --error: #b42318;
+
+  --info-bg: #e8effd;
+  --info-text: #2346a8;
+  --progress-bg: #f1ebfd;
+  --progress-text: #5b34b0;
+  --attention-bg: #fdf3e1;
+  --attention-text: #8a5300;
+  --success-bg: #e5f6ea;
+  --success-text: #17673a;
+  --danger-bg: #fde8e7;
+  --danger-text: #a3241b;
+
+  color-scheme: light;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141413;
+    --surface: #1d1d1b;
+    --border: #33332f;
+    --text: #f1f1ee;
+    --muted: #a3a39b;
+    --accent: #7c9cf5;
+    --accent-text: #0f1730;
+    --error: #f97066;
+
+    --info-bg: #1c2a4d;
+    --info-text: #a9c0fb;
+    --progress-bg: #2b2147;
+    --progress-text: #c8b5f7;
+    --attention-bg: #3b2c12;
+    --attention-text: #f5c66b;
+    --success-bg: #15321f;
+    --success-text: #86d9a2;
+    --danger-bg: #3d1a17;
+    --danger-text: #f9a39b;
+
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  line-height: 1.5;
+}
+
+a {
+  color: var(--accent);
+}
+
+h1 {
+  font-size: 1.6rem;
+  margin: 0 0 0.75rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 1.5rem 0 0.75rem;
+}
+
+.card > h2:first-child,
+.card > h1:first-child {
+  margin-top: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.error {
+  color: var(--error);
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* Layout */
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.whoami {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  text-align: right;
+}
+
+.whoami small {
+  display: block;
+  color: var(--muted);
+}
+
+.page {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+.narrow {
+  max-width: 32rem;
+  margin: 0 auto;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+/* Forms */
+
+.form {
+  display: grid;
+  gap: 1rem;
+}
+
+.form label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+
+.inline-form {
+  grid-template-columns: auto 1fr auto;
+  align-items: end;
+}
+
+@media (max-width: 40rem) {
+  .inline-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.75rem;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+button[type='submit'] {
+  justify-self: start;
+  padding: 0.6rem 1.25rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.link-button {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  padding: 0;
+}
+
+/* Sign in */
+
+.user-list,
+.ticket-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.user-card {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  margin: 0;
+  text-align: left;
+  color: var(--text);
+}
+
+.user-card:hover,
+.ticket-card:hover {
+  border-color: var(--accent);
+}
+
+/* Tickets */
+
+.ticket-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin: 0;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.ticket-card span {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.ticket-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.ticket-header h1 {
+  margin-bottom: 0.25rem;
+}
+
+.ticket-header p {
+  margin: 0;
+}
+
+.request {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--border);
+  white-space: pre-wrap;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.4rem 1.25rem;
+}
+
+.fields dt {
+  color: var(--muted);
+}
+
+.fields dd {
+  margin: 0;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-info {
+  background: var(--info-bg);
+  color: var(--info-text);
+}
+
+.badge-progress {
+  background: var(--progress-bg);
+  color: var(--progress-text);
+}
+
+.badge-attention {
+  background: var(--attention-bg);
+  color: var(--attention-text);
+}
+
+.badge-success {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.badge-danger {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.chip {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.table-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+th,
+td {
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.request-cell {
+  min-width: 16rem;
+}
+
+.timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.timeline li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.timeline li:last-child {
+  border-bottom: 0;
+}
+
+.event-message {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+}

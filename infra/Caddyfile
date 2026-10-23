@@ -1,0 +1,20 @@
+# Edge proxy for everything on the VPS.
+# Locally the addresses are http://*.localhost; on the VPS they are real hostnames,
+# and Caddy gets HTTPS certificates for them automatically.
+
+{$APP_ADDRESS} {
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+	handle {
+		reverse_proxy panel:80
+	}
+}
+
+# Client test sites, copied here by each site's GitHub Action:
+#   /<site-id>/                      production
+#   /previews/<site-id>/pr-<number>/ preview of a pull request
+{$SITES_ADDRESS} {
+	root * /srv/sites
+	file_server
+}
