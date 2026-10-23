@@ -55,6 +55,10 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-change_agents}:${POSTGRES_PASSWORD:-change_agents}@postgres:5432/${POSTGRES_DB:-change_agents}
       REDIS_URL: redis://redis:6379
+      SITES_REPOS_DIR: /repos
+    volumes:
+      # Local checkouts of the client sites, read-only. From Phase 5 the agents clone from GitHub instead.
+      - ${SITES_REPOS_DIR:-./test-sites}:/repos:ro
     depends_on:
       postgres:
         condition: service_healthy

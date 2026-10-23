@@ -1,4 +1,4 @@
-import type { Site, Ticket, TicketDetail, TicketStatus, User } from './types'
+import type { ProjectSummaryRecord, Site, Ticket, TicketDetail, TicketStatus, User } from './types'
 
 const DEMO_USER_KEY = 'demoUserId'
 
@@ -53,6 +53,7 @@ export const api = {
   demoUsers: () => request<User[]>('/demo-users'),
   me: () => request<User>('/me'),
   sites: () => request<Site[]>('/sites'),
+  siteSummary: (siteId: string) => request<ProjectSummaryRecord>(`/sites/${siteId}/summary`),
   tickets: () => request<Ticket[]>('/tickets'),
   ticket: (id: number) => request<TicketDetail>(`/tickets/${id}`),
   createTicket: (siteId: string, text: string) =>

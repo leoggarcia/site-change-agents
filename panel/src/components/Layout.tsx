@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, NavLink, useNavigate } from 'react-router'
 import { useAuth } from '../auth'
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -15,9 +15,19 @@ export function Layout({ children }: { children: ReactNode }) {
   return (
     <>
       <header className="topbar">
-        <Link to="/" className="brand">
-          Site Change Agents
-        </Link>
+        <nav className="nav">
+          <Link to="/" className="brand">
+            Site Change Agents
+          </Link>
+          {user?.role === 'agency' && (
+            <>
+              <NavLink to="/" end>
+                Requests
+              </NavLink>
+              <NavLink to="/sites">Sites</NavLink>
+            </>
+          )}
+        </nav>
         {user && (
           <div className="whoami">
             <span>

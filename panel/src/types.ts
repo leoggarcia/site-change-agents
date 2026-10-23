@@ -58,3 +58,31 @@ export interface TicketDetail extends Ticket {
   events: TicketEvent[]
   allowedTransitions: TicketStatus[]
 }
+
+// Written by the Project Indexer agent (agents/src/change_agents/indexer/schema.py).
+export interface ProjectSummary {
+  site_name: string
+  framework: string
+  overview: string
+  pages: {
+    route: string
+    file: string
+    title: string
+    sections: { name: string; component_file: string | null; description: string }[]
+  }[]
+  shared_components: { file: string; purpose: string; used_on: string[] }[]
+  content_locations: { content: string; file: string; how_to_edit: string }[]
+  styling: { approach: string; global_stylesheet: string | null; colors: string[]; fonts: string[] }
+  notes: string[]
+}
+
+export interface ProjectSummaryRecord {
+  id: string
+  siteId: string
+  sourceRef: string
+  summary: ProjectSummary
+  markdown: string
+  model: string
+  stats: { input_tokens?: number; output_tokens?: number; model_calls?: number; turns?: number; duration_seconds?: number }
+  createdAt: string
+}

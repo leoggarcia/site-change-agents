@@ -395,3 +395,49 @@ tbody tr:last-child td {
   margin: 0.25rem 0 0;
   color: var(--muted);
 }
+
+/* Navigation */
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.nav a:not(.brand) {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.nav a.active {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Project summary */
+
+code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.85em;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  padding: 0.05rem 0.3rem;
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.summary-block + .summary-block {
+  border-top: 1px solid var(--border);
+  margin-top: 1rem;
+}
+
+.summary-block h3 {
+  margin-bottom: 0.25rem;
+}
+
+.field-row {
+  display: contents;
+}

@@ -2,11 +2,15 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import type { User } from '../users/user.entity.js';
+import { ProjectSummary } from './project-summary.entity.js';
 import { Site } from './site.entity.js';
 
 @Injectable()
 export class SitesService {
-  constructor(@InjectRepository(Site) private readonly sites: Repository<Site>) {}
+  constructor(
+    @InjectRepository(Site) private readonly sites: Repository<Site>,
+    @InjectRepository(ProjectSummary) private readonly summaries: Repository<ProjectSummary>,
+  ) {}
 
   /** Sites the user may see: their own as a client, all of them as agency staff. */
   listFor(user: User): Promise<Site[]> {
@@ -26,5 +30,14 @@ export class SitesService {
       throw new ForbiddenException('You can only request changes for your own sites.');
     }
     return site;
+  }
+
+  /** Newest summary written by the Project Indexer, or null if the site was never indexed. */
+  async latestSummary(user: User, siteId: string): Promise<ProjectSummary | null> {
+    if (user.role !== 'agency') {
+      throw new ForbiddenException('Only the agency can see project summaries.');
+    }
+    await this.getAccessible(user, siteId);
+    return this.summaries.findOne({ where: { siteId }, order: { createdAt: 'DESC' } });
   }
 }

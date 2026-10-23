@@ -1,12 +1,16 @@
 from functools import lru_cache
+from pathlib import Path
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv
+from pydantic import field_validator
+from pydantic_settings import BaseSettings
+
+# Local runs read the project's root .env (API keys, model names). In Docker, compose passes the same values.
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
-    """Runtime settings, read from environment variables (or a local .env file)."""
-
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    """Runtime settings, read from environment variables."""
 
     database_url: str = "postgresql://change_agents:change_agents@localhost:5432/change_agents"
     redis_url: str = "redis://localhost:6379"
@@ -22,7 +26,19 @@ class Settings(BaseSettings):
     embedding_model: str = "google_genai:gemini-embedding-001"
     embedding_dimensions: int = 1536
 
+    # Free tiers allow few requests per minute; every model call waits for its turn.
+    llm_requests_per_minute: int = 8
+
+    # Folder with one checkout per site, named by site id (e.g. test-sites/luna-cafe).
+    sites_repos_dir: Path = PROJECT_ROOT / "test-sites"
+
+    @field_validator("sites_repos_dir")
+    @classmethod
+    def _relative_to_project_root(cls, path: Path) -> Path:
+        return path if path.is_absolute() else (PROJECT_ROOT / path).resolve()
+
 
 @lru_cache
 def get_settings() -> Settings:
+    load_dotenv(PROJECT_ROOT / ".env")
     return Settings()

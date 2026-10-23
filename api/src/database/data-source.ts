@@ -1,11 +1,13 @@
 import { DataSource } from 'typeorm';
 import type { DataSourceOptions } from 'typeorm';
 import { Client } from '../clients/client.entity.js';
+import { ProjectSummary } from '../sites/project-summary.entity.js';
 import { Site } from '../sites/site.entity.js';
 import { TicketEvent } from '../tickets/ticket-event.entity.js';
 import { Ticket } from '../tickets/ticket.entity.js';
 import { User } from '../users/user.entity.js';
 import { InitialSchema1761148800000 } from './migrations/1761148800000-InitialSchema.js';
+import { ProjectSummaries1761235200000 } from './migrations/1761235200000-ProjectSummaries.js';
 
 export const LOCAL_DATABASE_URL = 'postgresql://change_agents:change_agents@localhost:5432/change_agents';
 
@@ -14,8 +16,8 @@ export function dataSourceOptions(url = process.env.DATABASE_URL ?? LOCAL_DATABA
   return {
     type: 'postgres',
     url,
-    entities: [Client, User, Site, Ticket, TicketEvent],
-    migrations: [InitialSchema1761148800000],
+    entities: [Client, User, Site, Ticket, TicketEvent, ProjectSummary],
+    migrations: [InitialSchema1761148800000, ProjectSummaries1761235200000],
     synchronize: false,
   };
 }
