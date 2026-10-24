@@ -9,6 +9,7 @@ import { User } from '../users/user.entity.js';
 import { InitialSchema1761148800000 } from './migrations/1761148800000-InitialSchema.js';
 import { ProjectSummaries1761235200000 } from './migrations/1761235200000-ProjectSummaries.js';
 import { RagChunks1761321600000 } from './migrations/1761321600000-RagChunks.js';
+import { IntakeConversation1761408000000 } from './migrations/1761408000000-IntakeConversation.js';
 
 export const LOCAL_DATABASE_URL = 'postgresql://change_agents:change_agents@localhost:5432/change_agents';
 
@@ -18,7 +19,12 @@ export function dataSourceOptions(url = process.env.DATABASE_URL ?? LOCAL_DATABA
     type: 'postgres',
     url,
     entities: [Client, User, Site, Ticket, TicketEvent, ProjectSummary],
-    migrations: [InitialSchema1761148800000, ProjectSummaries1761235200000, RagChunks1761321600000],
+    migrations: [
+      InitialSchema1761148800000,
+      ProjectSummaries1761235200000,
+      RagChunks1761321600000,
+      IntakeConversation1761408000000,
+    ],
     synchronize: false,
   };
 }

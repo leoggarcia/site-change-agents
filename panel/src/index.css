@@ -396,6 +396,66 @@ tbody tr:last-child td {
   color: var(--muted);
 }
 
+.sources {
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.agent-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* Intake conversation */
+
+.question-card {
+  border-color: var(--info-text);
+}
+
+.question-meta {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.question {
+  margin: 0.25rem 0 1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.working {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--muted);
+}
+
+.pulse {
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--info-text);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}
+
 /* Navigation */
 
 .nav {

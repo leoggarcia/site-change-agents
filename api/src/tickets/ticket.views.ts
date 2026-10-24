@@ -14,6 +14,8 @@ export interface TicketView {
   details: string | null;
   acceptanceCriteria: string[] | null;
   risk: Ticket['risk'];
+  /** The Intake Agent's question waiting for the client's answer, if any. */
+  pendingQuestion: Ticket['pendingQuestion'];
   createdBy: { id: string; name: string };
   createdAt: Date;
   updatedAt: Date;
@@ -26,6 +28,10 @@ export interface TicketEventView {
   fromStatus: TicketStatus | null;
   toStatus: TicketStatus | null;
   message: string | null;
+  /** Client knowledge the agent relied on, e.g. "Luna Café plan: Basic › What the plan does not include". */
+  sources: string[];
+  /** The agent's internal note on why it decided this. Only shown to the agency. */
+  reasoning: string | null;
   createdAt: Date;
 }
 
@@ -48,13 +54,14 @@ export function toTicketView(ticket: Ticket): TicketView {
     details: ticket.details,
     acceptanceCriteria: ticket.acceptanceCriteria,
     risk: ticket.risk,
+    pendingQuestion: ticket.pendingQuestion,
     createdBy: { id: ticket.createdBy.id, name: ticket.createdBy.name },
     createdAt: ticket.createdAt,
     updatedAt: ticket.updatedAt,
   };
 }
 
-export function toTicketEventView(event: TicketEvent): TicketEventView {
+export function toTicketEventView(event: TicketEvent, forAgency: boolean): TicketEventView {
   const name =
     event.actorType === 'user'
       ? (event.actorUser?.name ?? 'Unknown user')
@@ -68,6 +75,8 @@ export function toTicketEventView(event: TicketEvent): TicketEventView {
     fromStatus: event.fromStatus,
     toStatus: event.toStatus,
     message: event.message,
+    sources: Array.isArray(event.data?.sources) ? (event.data.sources as string[]) : [],
+    reasoning: forAgency && typeof event.data?.reasoning === 'string' ? event.data.reasoning : null,
     createdAt: event.createdAt,
   };
 }

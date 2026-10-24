@@ -11,6 +11,7 @@ dependencies = [
     "langchain-google-genai>=4.4.2",
     "langchain-openai>=1.7.2",
     "langgraph>=1.2.16",
+    "langgraph-checkpoint-postgres>=3.2.0",
     "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.16.1",
     "python-dotenv>=1.2.4",
@@ -21,6 +22,7 @@ index-site = "change_agents.indexer.cli:main"
 rag-index = "change_agents.rag.cli:index_main"
 rag-search = "change_agents.rag.cli:search_main"
 rag-eval = "change_agents.rag.evaluate:main"
+intake-chat = "change_agents.intake.cli:main"
 
 [dependency-groups]
 dev = [

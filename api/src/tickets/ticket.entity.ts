@@ -23,6 +23,13 @@ export interface TicketTarget {
   section: string;
 }
 
+/** A question from the Intake Agent that the client hasn't answered yet. */
+export interface PendingQuestion {
+  question: string;
+  number: number;
+  max: number;
+}
+
 @Entity('tickets')
 export class Ticket {
   @PrimaryGeneratedColumn()
@@ -67,6 +74,9 @@ export class Ticket {
 
   @Column('text', { nullable: true })
   risk: RiskLevel | null;
+
+  @Column('jsonb', { name: 'pending_question', nullable: true })
+  pendingQuestion: PendingQuestion | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

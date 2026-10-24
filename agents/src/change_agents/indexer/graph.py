@@ -20,6 +20,7 @@ from langgraph.prebuilt import ToolNode
 
 from change_agents.indexer.prompts import EXPLORE_PROMPT, SUMMARIZE_PROMPT
 from change_agents.indexer.schema import ProjectSummary
+from change_agents.llm import add_usage
 
 DEFAULT_MAX_TURNS = 8
 
@@ -30,15 +31,6 @@ class IndexerState(TypedDict):
     turns: int
     summary: ProjectSummary | None
     usage: dict[str, int]
-
-
-def _add_usage(usage: dict[str, int], message: AIMessage | None) -> dict[str, int]:
-    meta = (message.usage_metadata if message else None) or {}
-    return {
-        "input_tokens": usage.get("input_tokens", 0) + meta.get("input_tokens", 0),
-        "output_tokens": usage.get("output_tokens", 0) + meta.get("output_tokens", 0),
-        "model_calls": usage.get("model_calls", 0) + 1,
-    }
 
 
 def _files_read(messages: list[AnyMessage]) -> str:
@@ -76,7 +68,7 @@ def build_indexer_graph(
 
     def explore(state: IndexerState) -> dict:
         response = explorer.invoke([SystemMessage(EXPLORE_PROMPT), *state["messages"]])
-        return {"messages": [response], "turns": state["turns"] + 1, "usage": _add_usage(state["usage"], response)}
+        return {"messages": [response], "turns": state["turns"] + 1, "usage": add_usage(state["usage"], response)}
 
     def after_explore(state: IndexerState) -> Literal["tools", "summarize"]:
         last = state["messages"][-1]
@@ -90,7 +82,7 @@ def build_indexer_graph(
         )
         if result["parsed"] is None:
             raise ValueError(f"The model's summary did not match the schema: {result['parsing_error']}")
-        return {"summary": result["parsed"], "usage": _add_usage(state["usage"], result["raw"])}
+        return {"summary": result["parsed"], "usage": add_usage(state["usage"], result["raw"])}
 
     graph = StateGraph(IndexerState)
     graph.add_node("explore", explore)

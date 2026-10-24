@@ -39,6 +39,8 @@ export interface Ticket {
   details: string | null
   acceptanceCriteria: string[] | null
   risk: 'low' | 'medium' | 'high' | null
+  /** The Intake Agent's question waiting for the client's answer. */
+  pendingQuestion: { question: string; number: number; max: number } | null
   createdBy: { id: string; name: string }
   createdAt: string
   updatedAt: string
@@ -46,11 +48,15 @@ export interface Ticket {
 
 export interface TicketEvent {
   id: string
-  type: 'created' | 'status_changed' | 'note'
+  type: 'created' | 'status_changed' | 'note' | 'agent_question' | 'client_answer'
   actor: { type: 'user' | 'agent' | 'system'; name: string }
   fromStatus: TicketStatus | null
   toStatus: TicketStatus | null
   message: string | null
+  /** Client knowledge the agent relied on. */
+  sources: string[]
+  /** The agent's internal note; only sent to the agency. */
+  reasoning: string | null
   createdAt: string
 }
 

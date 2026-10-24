@@ -43,6 +43,7 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-change_agents}:${POSTGRES_PASSWORD:-change_agents}@postgres:5432/${POSTGRES_DB:-change_agents}
       REDIS_URL: redis://redis:6379
+      AGENTS_URL: http://agents:8000
     depends_on:
       postgres:
         condition: service_healthy

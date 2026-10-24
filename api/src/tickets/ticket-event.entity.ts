@@ -4,7 +4,7 @@ import { User } from '../users/user.entity.js';
 import { Ticket } from './ticket.entity.js';
 import type { TicketStatus } from './ticket-status.js';
 
-export type TicketEventType = 'created' | 'status_changed' | 'note';
+export type TicketEventType = 'created' | 'status_changed' | 'note' | 'agent_question' | 'client_answer';
 export type ActorType = 'user' | 'agent' | 'system';
 
 /** One entry in a ticket's audit trail. Rows are append-only (enforced by a database trigger). */

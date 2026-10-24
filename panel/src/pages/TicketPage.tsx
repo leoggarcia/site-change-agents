@@ -1,15 +1,30 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useParams } from 'react-router'
 import { api } from '../api'
+import { useAuth } from '../auth'
 import { StatusBadge } from '../components/StatusBadge'
 import { formatDate, STATUS_INFO } from '../statuses'
 import type { TicketDetail, TicketEvent, TicketStatus } from '../types'
 import { useLoad } from '../useLoad'
 
+/** How often to check the ticket while the Intake Agent is working. */
+const POLL_MS = 3000
+
 export function TicketPage() {
   const id = Number(useParams().id)
+  const { user } = useAuth()
   const { data: ticket, error, loading, setData } = useLoad(() => api.ticket(id), [id])
+
+  // The agent works in the background; check again until it asks something or finishes.
+  const agentWorking = ticket?.status === 'intake' && !ticket.pendingQuestion
+  useEffect(() => {
+    if (!agentWorking) return
+    const timer = setTimeout(() => {
+      api.ticket(id).then(setData, () => {})
+    }, POLL_MS)
+    return () => clearTimeout(timer)
+  }, [agentWorking, ticket, id, setData])
 
   const backLink = (
     <p>
@@ -47,6 +62,17 @@ export function TicketPage() {
 
         {ticket.summary && <StructuredTicket ticket={ticket} />}
       </section>
+
+      {agentWorking && (
+        <section className="card working" aria-live="polite">
+          <span className="pulse" aria-hidden="true" />
+          Our assistant is reading your request. This usually takes less than a minute.
+        </section>
+      )}
+
+      {ticket.pendingQuestion && (
+        <QuestionCard ticket={ticket} canAnswer={user?.role === 'client'} onAnswered={setData} />
+      )}
 
       {ticket.allowedTransitions.length > 0 && <StatusForm ticket={ticket} onChanged={setData} />}
 
@@ -92,6 +118,65 @@ function StructuredTicket({ ticket }: { ticket: TicketDetail }) {
   )
 }
 
+function QuestionCard({
+  ticket,
+  canAnswer,
+  onAnswered,
+}: {
+  ticket: TicketDetail
+  canAnswer: boolean
+  onAnswered: (ticket: TicketDetail) => void
+}) {
+  const question = ticket.pendingQuestion!
+  const [answer, setAnswer] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setSending(true)
+    setError(null)
+    try {
+      onAnswered(await api.answer(ticket.id, answer))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send your answer.')
+      setSending(false)
+    }
+  }
+
+  return (
+    <section className="card question-card" aria-live="polite">
+      <p className="muted question-meta">
+        Question {question.number} of up to {question.max}
+      </p>
+      <p className="question">{question.question}</p>
+      {canAnswer ? (
+        <form onSubmit={submit} className="form">
+          <label>
+            Your answer
+            <textarea
+              value={answer}
+              onChange={(event) => setAnswer(event.target.value)}
+              rows={3}
+              maxLength={1000}
+              required
+              autoFocus
+            />
+          </label>
+          <div>
+            <button type="submit" disabled={sending || !answer.trim()}>
+              {sending ? 'Sending…' : 'Send answer'}
+            </button>
+          </div>
+          {error && <p className="error">{error}</p>}
+        </form>
+      ) : (
+        <p className="muted">Waiting for the client to answer.</p>
+      )}
+    </section>
+  )
+}
+
 function StatusForm({ ticket, onChanged }: { ticket: TicketDetail; onChanged: (ticket: TicketDetail) => void }) {
   const [status, setStatus] = useState<TicketStatus>(ticket.allowedTransitions[0])
   const [message, setMessage] = useState('')
@@ -117,7 +202,10 @@ function StatusForm({ ticket, onChanged }: { ticket: TicketDetail; onChanged: (t
   return (
     <section className="card">
       <h2>Change status</h2>
-      <p className="muted">Manual control for the agency. From Phase 3 on, the agents move tickets through these steps.</p>
+      <p className="muted">
+        Manual control for the agency. The agents move tickets through these steps on their own; moving a ticket
+        back to “Reviewing request” runs the intake assistant again.
+      </p>
       <form onSubmit={submit} className="form inline-form">
         <label>
           New status
@@ -146,15 +234,27 @@ function EventLine({ event }: { event: TicketEvent }) {
   const what =
     event.type === 'created'
       ? 'created the request'
-      : event.type === 'status_changed' && event.toStatus
-        ? `moved it to “${STATUS_INFO[event.toStatus].label}”`
-        : 'added a note'
+      : event.type === 'agent_question'
+        ? 'asked'
+        : event.type === 'client_answer'
+          ? 'answered'
+          : event.type === 'status_changed' && event.toStatus
+            ? `moved it to “${STATUS_INFO[event.toStatus].label}”`
+            : 'added a note'
 
   return (
     <>
       <div>
         <strong>{event.actor.name}</strong> {what}
         {event.message && <p className="event-message">{event.message}</p>}
+        {event.sources.length > 0 && (
+          <ul className="sources">
+            {event.sources.map((source) => (
+              <li key={source}>Source: {source}</li>
+            ))}
+          </ul>
+        )}
+        {event.reasoning && <p className="agent-note">Agent’s note (agency only): {event.reasoning}</p>}
       </div>
       <time className="muted nowrap">{formatDate(event.createdAt)}</time>
     </>

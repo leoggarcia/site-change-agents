@@ -4,6 +4,7 @@ from functools import lru_cache
 
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage
 from langchain_core.rate_limiters import InMemoryRateLimiter
 
 from change_agents.config import get_settings
@@ -22,3 +23,13 @@ def chat_model(model: str) -> BaseChatModel:
     """
     get_settings()  # loads .env so the provider SDK finds its API key
     return init_chat_model(model, rate_limiter=_rate_limiter(), max_retries=6)
+
+
+def add_usage(usage: dict[str, int], message: AIMessage | None) -> dict[str, int]:
+    """Adds one model call's token counts to a running total (kept in each agent's graph state)."""
+    meta = (message.usage_metadata if message else None) or {}
+    return {
+        "input_tokens": usage.get("input_tokens", 0) + meta.get("input_tokens", 0),
+        "output_tokens": usage.get("output_tokens", 0) + meta.get("output_tokens", 0),
+        "model_calls": usage.get("model_calls", 0) + 1,
+    }
