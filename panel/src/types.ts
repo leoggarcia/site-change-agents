@@ -41,6 +41,8 @@ export interface Ticket {
   risk: 'low' | 'medium' | 'high' | null
   /** The Intake Agent's question waiting for the client's answer. */
   pendingQuestion: { question: string; number: number; max: number } | null
+  /** The Coder Agent's change; only sent to the agency. */
+  change: { branch: string; commitSha: string | null; files: string[] } | null
   createdBy: { id: string; name: string }
   createdAt: string
   updatedAt: string
@@ -49,7 +51,10 @@ export interface Ticket {
 export interface TicketEvent {
   id: string
   type: 'created' | 'status_changed' | 'note' | 'agent_question' | 'client_answer'
-  actor: { type: 'user' | 'agent' | 'system'; name: string }
+  /** `agent` is "intake", "coder" or "reviewer"; `role` tells clients from agency staff. */
+  actor: { type: 'user' | 'agent' | 'system'; name: string; agent: string | null; role: Role | null }
+  /** For questions and answers: which question of the intake conversation. */
+  questionNumber: number | null
   fromStatus: TicketStatus | null
   toStatus: TicketStatus | null
   message: string | null

@@ -3,29 +3,35 @@ import type { FormEvent } from 'react'
 import { Link, useParams } from 'react-router'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import { Conversation } from '../components/Conversation'
+import { ProgressSteps } from '../components/ProgressSteps'
 import { StatusBadge } from '../components/StatusBadge'
 import { formatDate, STATUS_INFO } from '../statuses'
-import type { TicketDetail, TicketEvent, TicketStatus } from '../types'
+import type { TicketDetail, TicketStatus } from '../types'
 import { useLoad } from '../useLoad'
 
 /** How often to check the ticket while an agent is working on it. */
 const POLL_MS = 3000
 
-/** What the client sees while an agent works on each step. */
-const WORKING_MESSAGES: Partial<Record<TicketStatus, string>> = {
-  intake: 'Our assistant is reading your request. This usually takes less than a minute.',
-  in_progress: 'The change is being made.',
-  in_review: 'The change is being checked before you see it.',
+/** Statuses in which an agent is working in the background (queue jobs). */
+const AGENT_STATUSES: TicketStatus[] = ['intake', 'in_progress', 'in_review']
+
+const CHANGE_TYPES: Record<string, string> = {
+  content_update: 'Content update',
+  style_change: 'Style change',
+  new_section: 'New section',
+  image_change: 'Image change',
+  out_of_scope: 'Out of scope',
 }
 
 export function TicketPage() {
   const id = Number(useParams().id)
   const { user } = useAuth()
+  const isAgency = user?.role === 'agency'
   const { data: ticket, error, loading, setData } = useLoad(() => api.ticket(id), [id])
 
-  // Agents work in the background (queue jobs); check again until one asks something or finishes.
-  const workingMessage = ticket && !ticket.pendingQuestion ? WORKING_MESSAGES[ticket.status] : undefined
-  const agentWorking = workingMessage !== undefined
+  // Check again until the agent asks something or finishes.
+  const agentWorking = ticket !== null && !ticket.pendingQuestion && AGENT_STATUSES.includes(ticket.status)
   useEffect(() => {
     if (!agentWorking) return
     const timer = setTimeout(() => {
@@ -35,7 +41,7 @@ export function TicketPage() {
   }, [agentWorking, ticket, id, setData])
 
   const backLink = (
-    <p>
+    <p className="back">
       <Link to="/">← All requests</Link>
     </p>
   )
@@ -53,134 +59,95 @@ export function TicketPage() {
   return (
     <>
       {backLink}
-      <section className="card">
-        <div className="ticket-header">
-          <div>
-            <h1>{ticket.summary ?? `Request #${ticket.id}`}</h1>
-            <p className="muted">
-              {ticket.siteName} · #{ticket.id} · requested by {ticket.createdBy.name} on {formatDate(ticket.createdAt)}
-            </p>
-          </div>
+      <header className="ticket-head">
+        <div className="ticket-title">
+          <h1>{ticket.summary ?? ticket.request}</h1>
           <StatusBadge status={ticket.status} />
         </div>
-        <p className="muted">{STATUS_INFO[ticket.status].description}</p>
+        <p className="muted">
+          {ticket.siteName} · #{ticket.id} · requested by {ticket.createdBy.name} on {formatDate(ticket.createdAt)}
+        </p>
+        <ProgressSteps status={ticket.status} events={ticket.events} />
+        <p className="status-help muted small">{STATUS_INFO[ticket.status].description}</p>
+      </header>
 
-        <h2>Request</h2>
-        <blockquote className="request">{ticket.request}</blockquote>
+      <div className="ticket-layout">
+        <Conversation ticket={ticket} isAgency={isAgency} onChanged={setData} />
 
-        {ticket.summary && <StructuredTicket ticket={ticket} />}
-      </section>
-
-      {agentWorking && (
-        <section className="card working" aria-live="polite">
-          <span className="pulse" aria-hidden="true" />
-          {workingMessage}
-        </section>
-      )}
-
-      {ticket.pendingQuestion && (
-        <QuestionCard ticket={ticket} canAnswer={user?.role === 'client'} onAnswered={setData} />
-      )}
-
-      {ticket.allowedTransitions.length > 0 && <StatusForm ticket={ticket} onChanged={setData} />}
-
-      <section className="card">
-        <h2>History</h2>
-        <ol className="timeline">
-          {ticket.events.map((event) => (
-            <li key={event.id}>
-              <EventLine event={event} />
-            </li>
-          ))}
-        </ol>
-      </section>
+        <aside className="ticket-side">
+          <TicketCard ticket={ticket} />
+          {ticket.change && <CodeChange change={ticket.change} />}
+          {ticket.allowedTransitions.length > 0 && <StatusForm ticket={ticket} onChanged={setData} />}
+        </aside>
+      </div>
     </>
   )
 }
 
-function StructuredTicket({ ticket }: { ticket: TicketDetail }) {
+function TicketCard({ ticket }: { ticket: TicketDetail }) {
+  if (!ticket.summary) {
+    return (
+      <section className="card side-card">
+        <h2>Ticket</h2>
+        <p className="muted small">
+          {ticket.changeType === 'out_of_scope'
+            ? 'This request is outside the plan, so no ticket was written.'
+            : 'The intake assistant turns the request into a ticket once it is clear.'}
+        </p>
+      </section>
+    )
+  }
+
   return (
-    <>
+    <section className="card side-card">
       <h2>Ticket</h2>
-      <dl className="fields">
+      <dl className="side-fields">
         <dt>Type</dt>
-        <dd>{ticket.changeType ?? '—'}</dd>
+        <dd>{ticket.changeType ? (CHANGE_TYPES[ticket.changeType] ?? ticket.changeType) : '—'}</dd>
         <dt>Where</dt>
         <dd>{ticket.target ? `${ticket.target.page} › ${ticket.target.section}` : '—'}</dd>
+        <dt>Risk</dt>
+        <dd>{ticket.risk ? <span className={`risk risk-${ticket.risk}`}>{ticket.risk}</span> : '—'}</dd>
         <dt>Details</dt>
         <dd>{ticket.details ?? '—'}</dd>
-        <dt>Risk</dt>
-        <dd>{ticket.risk ?? '—'}</dd>
       </dl>
-      {ticket.acceptanceCriteria && (
+      {ticket.acceptanceCriteria && ticket.acceptanceCriteria.length > 0 && (
         <>
           <h3>Done when</h3>
-          <ul>
+          <ul className="checklist">
             {ticket.acceptanceCriteria.map((criterion) => (
               <li key={criterion}>{criterion}</li>
             ))}
           </ul>
         </>
       )}
-    </>
+    </section>
   )
 }
 
-function QuestionCard({
-  ticket,
-  canAnswer,
-  onAnswered,
-}: {
-  ticket: TicketDetail
-  canAnswer: boolean
-  onAnswered: (ticket: TicketDetail) => void
-}) {
-  const question = ticket.pendingQuestion!
-  const [answer, setAnswer] = useState('')
-  const [sending, setSending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function submit(event: FormEvent) {
-    event.preventDefault()
-    setSending(true)
-    setError(null)
-    try {
-      onAnswered(await api.answer(ticket.id, answer))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send your answer.')
-      setSending(false)
-    }
-  }
-
+function CodeChange({ change }: { change: NonNullable<TicketDetail['change']> }) {
   return (
-    <section className="card question-card" aria-live="polite">
-      <p className="muted question-meta">
-        Question {question.number} of up to {question.max}
-      </p>
-      <p className="question">{question.question}</p>
-      {canAnswer ? (
-        <form onSubmit={submit} className="form">
-          <label>
-            Your answer
-            <textarea
-              value={answer}
-              onChange={(event) => setAnswer(event.target.value)}
-              rows={3}
-              maxLength={1000}
-              required
-              autoFocus
-            />
-          </label>
-          <div>
-            <button type="submit" disabled={sending || !answer.trim()}>
-              {sending ? 'Sending…' : 'Send answer'}
-            </button>
-          </div>
-          {error && <p className="error">{error}</p>}
-        </form>
-      ) : (
-        <p className="muted">Waiting for the client to answer.</p>
-      )}
+    <section className="card side-card">
+      <h2>Code change</h2>
+      <dl className="side-fields">
+        <dt>Branch</dt>
+        <dd>
+          <code>{change.branch}</code>
+        </dd>
+        <dt>Commit</dt>
+        <dd>{change.commitSha ? <code>{change.commitSha.slice(0, 7)}</code> : '—'}</dd>
+        <dt>Files</dt>
+        <dd>
+          <ul className="file-list">
+            {change.files.map((file) => (
+              <li key={file}>
+                <code>{file}</code>
+              </li>
+            ))}
+          </ul>
+        </dd>
+      </dl>
+      <p className="muted small">The pull request and its preview arrive in Phase 7.</p>
     </section>
   )
 }
@@ -208,15 +175,14 @@ function StatusForm({ ticket, onChanged }: { ticket: TicketDetail; onChanged: (t
   }
 
   return (
-    <section className="card">
-      <h2>Change status</h2>
-      <p className="muted">
-        Manual control for the agency. The agents move tickets through these steps on their own; moving a ticket
-        back to “Reviewing request” runs the intake assistant again.
+    <section className="card side-card">
+      <h2>Agency controls</h2>
+      <p className="muted small">
+        Agents move tickets on their own. Moving one back to “{STATUS_INFO.intake.label}” runs the intake assistant again.
       </p>
-      <form onSubmit={submit} className="form inline-form">
+      <form onSubmit={submit} className="form">
         <label>
-          New status
+          Move to
           <select value={status} onChange={(event) => setStatus(event.target.value as TicketStatus)}>
             {ticket.allowedTransitions.map((option) => (
               <option key={option} value={option}>
@@ -225,47 +191,15 @@ function StatusForm({ ticket, onChanged }: { ticket: TicketDetail; onChanged: (t
             ))}
           </select>
         </label>
-        <label className="grow">
-          Note (optional)
-          <input value={message} onChange={(event) => setMessage(event.target.value)} maxLength={1000} />
+        <label>
+          Note for the client (optional)
+          <textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={1000} rows={2} />
         </label>
         <button type="submit" disabled={saving}>
-          {saving ? 'Saving…' : 'Update'}
+          {saving ? 'Saving…' : 'Update status'}
         </button>
       </form>
       {error && <p className="error">{error}</p>}
     </section>
-  )
-}
-
-function EventLine({ event }: { event: TicketEvent }) {
-  const what =
-    event.type === 'created'
-      ? 'created the request'
-      : event.type === 'agent_question'
-        ? 'asked'
-        : event.type === 'client_answer'
-          ? 'answered'
-          : event.type === 'status_changed' && event.toStatus
-            ? `moved it to “${STATUS_INFO[event.toStatus].label}”`
-            : 'added a note'
-
-  return (
-    <>
-      <div>
-        <strong>{event.actor.name}</strong> {what}
-        {event.message && <p className="event-message">{event.message}</p>}
-        {event.sources.length > 0 && (
-          <ul className="sources">
-            {event.sources.map((source) => (
-              <li key={source}>Source: {source}</li>
-            ))}
-          </ul>
-        )}
-        {event.reasoning && <p className="agent-note">Agent’s note (agency only): {event.reasoning}</p>}
-        {event.error && <p className="agent-note">Error (agency only): {event.error}</p>}
-      </div>
-      <time className="muted nowrap">{formatDate(event.createdAt)}</time>
-    </>
   )
 }

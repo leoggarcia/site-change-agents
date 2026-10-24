@@ -16,6 +16,8 @@ export interface TicketView {
   risk: Ticket['risk'];
   /** The Intake Agent's question waiting for the client's answer, if any. */
   pendingQuestion: Ticket['pendingQuestion'];
+  /** The Coder Agent's change. Only sent to the agency. */
+  change: { branch: string; commitSha: string | null; files: string[] } | null;
   createdBy: { id: string; name: string };
   createdAt: Date;
   updatedAt: Date;
@@ -24,7 +26,10 @@ export interface TicketView {
 export interface TicketEventView {
   id: string;
   type: TicketEvent['type'];
-  actor: { type: TicketEvent['actorType']; name: string };
+  /** `agent` is the agent's key ("intake", "coder", "reviewer"); `role` tells clients from agency staff. */
+  actor: { type: TicketEvent['actorType']; name: string; agent: string | null; role: 'client' | 'agency' | null };
+  /** For questions and answers: which question of the intake conversation. */
+  questionNumber: number | null;
   fromStatus: TicketStatus | null;
   toStatus: TicketStatus | null;
   message: string | null;
@@ -43,7 +48,7 @@ export interface TicketDetailView extends TicketView {
   allowedTransitions: TicketStatus[];
 }
 
-export function toTicketView(ticket: Ticket): TicketView {
+export function toTicketView(ticket: Ticket, forAgency = false): TicketView {
   return {
     id: ticket.id,
     siteId: ticket.siteId,
@@ -57,6 +62,10 @@ export function toTicketView(ticket: Ticket): TicketView {
     acceptanceCriteria: ticket.acceptanceCriteria,
     risk: ticket.risk,
     pendingQuestion: ticket.pendingQuestion,
+    change:
+      forAgency && ticket.branch
+        ? { branch: ticket.branch, commitSha: ticket.commitSha, files: ticket.changedFiles ?? [] }
+        : null,
     createdBy: { id: ticket.createdBy.id, name: ticket.createdBy.name },
     createdAt: ticket.createdAt,
     updatedAt: ticket.updatedAt,
@@ -73,7 +82,8 @@ export function toTicketEventView(event: TicketEvent, forAgency: boolean): Ticke
   return {
     id: event.id,
     type: event.type,
-    actor: { type: event.actorType, name },
+    actor: { type: event.actorType, name, agent: event.actorAgent, role: event.actorUser?.role ?? null },
+    questionNumber: typeof event.data?.number === 'number' ? event.data.number : null,
     fromStatus: event.fromStatus,
     toStatus: event.toStatus,
     message: event.message,

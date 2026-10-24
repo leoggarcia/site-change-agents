@@ -26,6 +26,7 @@ class FakeWorkers {
   intakeJobs: IntakeJob[] = [];
   holdCoding = false;
   failNextCoding = false;
+  codingNeedsHuman = false;
   heldCoding = new Map<number, Job>();
   private readonly connection = { url: TEST_REDIS_URL };
   private readonly results = new Queue(AGENT_RESULTS_QUEUE, { connection: this.connection });
@@ -42,10 +43,17 @@ class FakeWorkers {
         this.failNextCoding = false;
         await this.report(job, 'coding', { status: 'retrying', error: 'RuntimeError: provider down' }, 1);
         await this.report(job, 'coding', { status: 'failed', error: 'RuntimeError: provider down' }, 2);
+      } else if (this.codingNeedsHuman) {
+        this.codingNeedsHuman = false;
+        await this.report(job, 'coding', {
+          status: 'needs_human',
+          message: "This change can't be made automatically: it needs an external script.",
+          branch: `agent/ticket-${job.data.ticketId}`,
+        });
       } else if (this.holdCoding) {
         this.heldCoding.set(job.data.ticketId, job);
       } else {
-        await this.report(job, 'coding', { status: 'done', summary: 'Changed the phone number.' });
+        await this.report(job, 'coding', codingDone(job.data.ticketId));
       }
     });
     this.listen(REVIEW_QUEUE, (job: Job) => this.report(job, 'review', { status: 'approved', summary: 'Looks right.' }));
@@ -54,7 +62,7 @@ class FakeWorkers {
   async releaseCoding(ticketId: number): Promise<void> {
     const job = this.heldCoding.get(ticketId)!;
     this.heldCoding.delete(ticketId);
-    await this.report(job, 'coding', { status: 'done', summary: 'Changed the phone number.' });
+    await this.report(job, 'coding', codingDone(ticketId));
   }
 
   async close(): Promise<void> {
@@ -70,6 +78,19 @@ class FakeWorkers {
     const report: Report = { stage, jobId: job.id!, ticketId: job.data.ticketId, attempt, attempts: 2, result };
     await this.results.add('result', report, { jobId: `${stage}-${job.id}-${attempt}-${(result as { status: string }).status}` });
   }
+}
+
+function codingDone(ticketId: number) {
+  return {
+    status: 'done',
+    summary: 'Updated the phone in src/data/business.json.',
+    branch: `agent/ticket-${ticketId}`,
+    commit: 'abc123',
+    files: ['src/data/business.json'],
+    insertions: 1,
+    deletions: 1,
+    buildRounds: 1,
+  };
 }
 
 /** Waits until `check` stops throwing (the pipeline runs through queues, so results arrive a bit later). */
@@ -292,8 +313,15 @@ describe('Tickets (e2e)', () => {
       ]);
       const queued = done.events.find((event: { toStatus: string }) => event.toStatus === 'pending');
       expect(queued).toMatchObject({ sources: ['Plan › What the plan includes'], reasoning: null }); // reasoning is agency-only
-      const forAgency = (await getAs(agency, id)).events.find((event: { toStatus: string }) => event.toStatus === 'pending');
+      const agencyView = await getAs(agency, id);
+      const forAgency = agencyView.events.find((event: { toStatus: string }) => event.toStatus === 'pending');
       expect(forAgency.reasoning).toBe('The client gave the new number.');
+
+      // The code change: details for the agency, a plain message for the client.
+      expect(agencyView.change).toEqual({ branch: `agent/ticket-${id}`, commitSha: 'abc123', files: ['src/data/business.json'] });
+      expect(done.change).toBeNull();
+      const coded = done.events.find((event: { toStatus: string }) => event.toStatus === 'in_review');
+      expect(coded).toMatchObject({ message: 'The change is made and is being checked.', reasoning: null });
 
       await request(app.getHttpServer()).post(`/api/tickets/${id}/answer`).set(as(sofia)).send({ answer: 'again' }).expect(409);
     });
@@ -388,6 +416,22 @@ describe('Tickets (e2e)', () => {
       const waiting = await queue.getWaiting();
       await queue.close();
       expect(waiting.map((job) => job.data)).toEqual([{ siteId: 'luna-cafe' }]); // the second request was deduplicated
+    });
+
+    it('hands a change the coder could not make to a person, and frees the site', async () => {
+      workers.codingNeedsHuman = true;
+      workers.intakeReplies.push(ready('Add a booking widget'), ready('Next change'));
+      const blocked = await createAs(emily, 'brightsmile-dental', 'Add a booking widget');
+      const next = await createAs(emily, 'brightsmile-dental', 'Next change please');
+
+      await eventually(async () => expect(await statusOf(blocked)).toBe('needs_human'));
+      const ticket = await getAs(agency, blocked);
+      expect(ticket.events.at(-1)).toMatchObject({
+        actor: { name: 'coder agent' },
+        message: 'This change needs a person from the agency.',
+        reasoning: "This change can't be made automatically: it needs an external script.",
+      });
+      await eventually(async () => expect(await statusOf(next)).toBe('awaiting_approval'));
     });
   });
 });

@@ -16,11 +16,13 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379"
 
     # Every model is a "provider:model" string, so switching providers is a config change.
-    # Examples: "google_genai:gemini-3.5-flash", "anthropic:claude-sonnet-5-5", "openai:gpt-5".
-    intake_model: str = "google_genai:gemini-3.5-flash"
-    coder_model: str = "google_genai:gemini-3.5-flash"
-    reviewer_model: str = "google_genai:gemini-3.5-flash"
-    indexer_model: str = "google_genai:gemini-3.5-flash"
+    # Examples: "google_genai:gemini-3.5-flash-lite", "anthropic:claude-sonnet-5-5", "openai:gpt-5".
+    # Free-tier defaults: each Gemini model has its own daily quota, so the reviewer uses a different
+    # model than the coder and they don't compete for it.
+    intake_model: str = "google_genai:gemini-3.5-flash-lite"
+    coder_model: str = "google_genai:gemini-3.5-flash-lite"
+    reviewer_model: str = "google_genai:gemini-3.1-flash-lite"
+    indexer_model: str = "google_genai:gemini-3.5-flash-lite"
 
     # Changing the embedding model or its dimension means re-indexing every site.
     embedding_model: str = "google_genai:gemini-embedding-001"
@@ -28,10 +30,17 @@ class Settings(BaseSettings):
     # Gemini's free tier counts every text in a batch as one request (100 per minute).
     embedding_texts_per_minute: int = 90
 
-    # Free tiers allow few requests per minute; every model call waits for its turn.
-    llm_requests_per_minute: int = 5
+    # Free tiers allow few requests per minute; every model call waits for its turn. Each model gets its
+    # own limiter: the default below, or its entry in llm_rpm_overrides (env: a JSON object).
+    # Gemini free tier (Oct 2026): Flash Lite 15 per minute (500 per day), Flash 5 per minute (20 per day).
+    llm_requests_per_minute: int = 12
+    llm_rpm_overrides: dict[str, int] = {
+        "google_genai:gemini-3.5-flash": 4,
+        "google_genai:gemini-3.6-flash": 4,
+        "google_genai:gemini-3.8-flash": 4,
+    }
 
-    # Share of stub coding/review jobs that fail on purpose (0 to 1), to see retries working. Phase 4 only.
+    # Share of stub review jobs that fail on purpose (0 to 1), to see retries working. Until Phase 6.
     stub_failure_rate: float = 0.0
 
     # Folder with one checkout per site, named by site id (e.g. test-sites/luna-cafe).
@@ -40,7 +49,11 @@ class Settings(BaseSettings):
     # Client knowledge for RAG: brand guides, plans and past tickets, one folder per site id.
     knowledge_dir: Path = PROJECT_ROOT / "knowledge"
 
-    @field_validator("sites_repos_dir", "knowledge_dir")
+    # Where the Coder Agent clones a site for each ticket, and the npm cache shared by those clones.
+    workspaces_dir: Path = PROJECT_ROOT / "data" / "workspaces"
+    npm_cache_dir: Path = PROJECT_ROOT / "data" / "npm-cache"
+
+    @field_validator("sites_repos_dir", "knowledge_dir", "workspaces_dir", "npm_cache_dir")
     @classmethod
     def _relative_to_project_root(cls, path: Path) -> Path:
         return path if path.is_absolute() else (PROJECT_ROOT / path).resolve()

@@ -23,8 +23,25 @@ export type IntakeResult =
   | ({ status: 'ticket'; ticket: IntakeTicket } & IntakeTrace)
   | ({ status: 'out_of_scope' | 'needs_human'; message: string } & IntakeTrace);
 
-/** Coding and review results. Stubs until Phases 5 and 6 replace them with the real agents. */
-export type CodingResult = { status: 'done'; summary: string };
+/** What the Coder Agent returns (agents/src/change_agents/coder/runner.py). */
+export type CodingResult = {
+  branch: string;
+  usage?: Record<string, number>;
+  seconds?: number;
+} & (
+  | {
+      status: 'done';
+      summary: string;
+      commit: string;
+      files: string[];
+      insertions: number;
+      deletions: number;
+      buildRounds: number;
+    }
+  | { status: 'needs_human'; message: string; buildOutput?: string | null }
+);
+
+/** Review results. A stub until Phase 6 replaces it with the Reviewer Agent. */
 export type ReviewResult = { status: 'approved'; summary: string };
 export type ReindexResult = { status: 'done'; code: Record<string, number>; knowledge: Record<string, number> };
 
@@ -49,11 +66,15 @@ export type IntakeJob =
   | { ticketId: number; threadId: string; action: 'start'; siteId: string; request: string }
   | { ticketId: number; threadId: string; action: 'answer'; answer: string; questionNumber: number };
 
+/** The structured ticket the Coder Agent works from. */
 export interface CodingJob {
   ticketId: number;
   siteId: string;
   summary: string;
   details: string;
+  changeType: string | null;
+  target: { page: string; section: string } | null;
+  acceptanceCriteria: string[];
 }
 
 export interface ReviewJob {

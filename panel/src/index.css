@@ -262,28 +262,6 @@ button.secondary {
   font-size: 0.9rem;
 }
 
-.ticket-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-}
-
-.ticket-header h1 {
-  margin-bottom: 0.25rem;
-}
-
-.ticket-header p {
-  margin: 0;
-}
-
-.request {
-  margin: 0;
-  padding: 0.75rem 1rem;
-  border-left: 3px solid var(--border);
-  white-space: pre-wrap;
-}
-
 .fields {
   display: grid;
   grid-template-columns: max-content 1fr;
@@ -389,89 +367,6 @@ tbody tr:last-child td {
   min-width: 16rem;
 }
 
-.timeline {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.timeline li {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.timeline li:last-child {
-  border-bottom: 0;
-}
-
-.event-message {
-  margin: 0.25rem 0 0;
-  color: var(--muted);
-}
-
-.sources {
-  margin: 0.35rem 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
-.agent-note {
-  margin: 0.35rem 0 0;
-  font-size: 0.85rem;
-  font-style: italic;
-  color: var(--muted);
-}
-
-/* Intake conversation */
-
-.question-card {
-  border-color: var(--info-text);
-}
-
-.question-meta {
-  margin: 0;
-  font-size: 0.85rem;
-}
-
-.question {
-  margin: 0.25rem 0 1rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-
-.working {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  color: var(--muted);
-}
-
-.pulse {
-  flex: none;
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 50%;
-  background: var(--info-text);
-  animation: pulse 1.2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  50% {
-    opacity: 0.25;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pulse {
-    animation: none;
-  }
-}
-
 /* Navigation */
 
 .nav {
@@ -516,4 +411,555 @@ code {
 
 .field-row {
   display: contents;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Ticket page */
+
+.back {
+  margin: 0 0 1rem;
+}
+
+.ticket-head {
+  margin-bottom: 1.5rem;
+}
+
+.ticket-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.ticket-title h1 {
+  margin: 0 0 0.35rem;
+}
+
+.ticket-head > p {
+  margin: 0;
+}
+
+.ticket-head > .status-help {
+  margin-top: 0.75rem;
+}
+
+.ticket-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 56rem) {
+  .ticket-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ticket-side {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.ticket-side .card {
+  margin: 0;
+}
+
+.side-card h2 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.side-card h3 {
+  font-size: 0.9rem;
+  margin: 1.25rem 0 0.5rem;
+}
+
+.side-card select,
+.side-card textarea {
+  width: 100%;
+}
+
+.side-fields {
+  display: grid;
+  margin: 0;
+}
+
+.side-fields dt {
+  margin-top: 0.75rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.side-fields dt:first-child {
+  margin-top: 0;
+}
+
+.side-fields dd {
+  margin: 0.1rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.checklist,
+.file-list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checklist li {
+  position: relative;
+  padding-left: 1.4rem;
+  font-size: 0.95rem;
+}
+
+.checklist li::before {
+  content: '';
+  position: absolute;
+  left: 0.1rem;
+  top: 0.3rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 1.5px solid var(--muted);
+  border-radius: 0.2rem;
+}
+
+.risk {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.risk-low {
+  color: var(--success-text);
+}
+
+.risk-medium {
+  color: var(--attention-text);
+}
+
+.risk-high {
+  color: var(--danger-text);
+}
+
+/* Progress steps */
+
+.progress {
+  margin-top: 1.5rem;
+}
+
+.steps {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* The line leading into each step. */
+.step::before {
+  content: '';
+  position: absolute;
+  top: 0.45rem;
+  right: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+}
+
+.step:first-child::before {
+  display: none;
+}
+
+.step-dot {
+  position: relative;
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.step-done::before,
+.step-current::before,
+.step-paused::before,
+.step-failed::before {
+  background: var(--accent);
+}
+
+.step-done .step-dot {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.step-current,
+.step-paused,
+.step-failed {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.step-current .step-dot {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--info-bg);
+}
+
+.step-paused .step-dot {
+  border-color: var(--attention-text);
+  background: var(--attention-bg);
+}
+
+.step-failed .step-dot {
+  border-color: var(--danger-text);
+  background: var(--danger-bg);
+}
+
+.steps-mobile {
+  display: none;
+}
+
+@media (max-width: 40rem) {
+  .step-label {
+    display: none;
+  }
+
+  .steps-mobile {
+    display: block;
+    margin: 0.6rem 0 0;
+  }
+}
+
+/* Conversation */
+
+.conversation {
+  margin: 0;
+}
+
+.messages {
+  display: grid;
+  gap: 1.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.day {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.day::before,
+.day::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  max-width: 85%;
+}
+
+.msg-client {
+  flex-direction: row-reverse;
+  margin-left: auto;
+}
+
+@media (max-width: 40rem) {
+  .msg {
+    max-width: 100%;
+  }
+}
+
+.msg-body {
+  display: grid;
+  justify-items: start;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.msg-client .msg-body {
+  justify-items: end;
+}
+
+.msg-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.msg-client .msg-meta {
+  flex-direction: row-reverse;
+}
+
+.msg-meta strong {
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.msg-label {
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--info-bg);
+  color: var(--info-text);
+  font-weight: 600;
+}
+
+.bubble {
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem 1rem 1rem 1rem;
+  background: var(--bg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg-client .bubble {
+  border-color: var(--accent);
+  border-radius: 1rem 0.3rem 1rem 1rem;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.avatar-person,
+.avatar-intake {
+  background: var(--info-bg);
+  color: var(--info-text);
+}
+
+.avatar-agency {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.avatar-coder {
+  background: var(--progress-bg);
+  color: var(--progress-text);
+}
+
+.avatar-reviewer {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.msg-status {
+  line-height: 1;
+}
+
+.source-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.source-chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.disclosure {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.disclosure summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.disclosure p {
+  margin: 0.35rem 0 0;
+}
+
+.disclosure pre {
+  max-height: 12rem;
+  margin: 0.4rem 0 0;
+  padding: 0.6rem 0.75rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* System events: small, centered, colored by what happened. */
+.line {
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.line-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 100%;
+  padding: 0.3rem 0.8rem;
+  border-radius: 1rem;
+  background: var(--bg);
+}
+
+.line-row svg {
+  flex: none;
+}
+
+.line-row time {
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.line-warning .line-row {
+  background: var(--attention-bg);
+  color: var(--attention-text);
+}
+
+.line-danger .line-row {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.line-success .line-row {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.line .disclosure {
+  width: min(100%, 36rem);
+  text-align: left;
+}
+
+.bubble-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--muted);
+}
+
+.dots {
+  display: inline-flex;
+  gap: 0.2rem;
+}
+
+.dots i {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: blink 1.2s ease-in-out infinite;
+}
+
+.dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes blink {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dots i {
+    animation: none;
+  }
+}
+
+.composer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.composer textarea {
+  flex: 1;
+  min-width: 12rem;
+  resize: vertical;
+}
+
+.composer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.composer-error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.composer-note {
+  margin: 1.25rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
 }

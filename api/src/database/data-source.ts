@@ -10,6 +10,7 @@ import { InitialSchema1761148800000 } from './migrations/1761148800000-InitialSc
 import { ProjectSummaries1761235200000 } from './migrations/1761235200000-ProjectSummaries.js';
 import { RagChunks1761321600000 } from './migrations/1761321600000-RagChunks.js';
 import { IntakeConversation1761408000000 } from './migrations/1761408000000-IntakeConversation.js';
+import { TicketCodeChange1761494400000 } from './migrations/1761494400000-TicketCodeChange.js';
 
 export const LOCAL_DATABASE_URL = 'postgresql://change_agents:change_agents@localhost:5432/change_agents';
 
@@ -24,6 +25,7 @@ export function dataSourceOptions(url = process.env.DATABASE_URL ?? LOCAL_DATABA
       ProjectSummaries1761235200000,
       RagChunks1761321600000,
       IntakeConversation1761408000000,
+      TicketCodeChange1761494400000,
     ],
     synchronize: false,
   };

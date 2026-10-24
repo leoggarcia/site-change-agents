@@ -25,6 +25,7 @@ rag-search = "change_agents.rag.cli:search_main"
 rag-eval = "change_agents.rag.evaluate:main"
 intake-chat = "change_agents.intake.cli:main"
 agents-worker = "change_agents.worker.main:main"
+coder-run = "change_agents.coder.cli:main"
 
 [dependency-groups]
 dev = [

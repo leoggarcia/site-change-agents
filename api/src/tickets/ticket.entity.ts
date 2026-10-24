@@ -78,6 +78,16 @@ export class Ticket {
   @Column('jsonb', { name: 'pending_question', nullable: true })
   pendingQuestion: PendingQuestion | null;
 
+  // The Coder Agent's change (Phase 5): reviewed in Phase 6, opened as a pull request in Phase 7.
+  @Column('text', { nullable: true })
+  branch: string | null;
+
+  @Column('text', { name: 'commit_sha', nullable: true })
+  commitSha: string | null;
+
+  @Column('jsonb', { name: 'changed_files', nullable: true })
+  changedFiles: string[] | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

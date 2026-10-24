@@ -71,3 +71,12 @@ def test_times_out() -> None:
 def test_report_ids_differ_per_attempt(attempts_made: int) -> None:
     _, reports = run(failing(RuntimeError("x")), job(attempts_made=attempts_made))
     assert reports[0][0] == f"coding-7-attempt-{attempts_made + 1}"
+
+
+def test_does_not_retry_when_the_daily_quota_is_used_up() -> None:
+    quota = RuntimeError("429 RESOURCE_EXHAUSTED quotaId GenerateRequestsPerDayPerProjectPerModel-FreeTier")
+    error, reports = run(failing(quota), job(attempts_made=0))
+
+    assert isinstance(error, UnrecoverableError)
+    assert reports[0][1]["result"]["status"] == "failed"
+    assert "daily quota is used up" in reports[0][1]["result"]["error"]

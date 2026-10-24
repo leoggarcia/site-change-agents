@@ -17,7 +17,12 @@ import type { TicketDetailView, TicketView } from './ticket.views.js';
 export type Actor = { type: 'user'; user: User } | { type: 'agent'; agent: string } | { type: 'system' };
 
 export interface StatusChangeOptions {
-  fields?: Partial<Pick<Ticket, 'summary' | 'changeType' | 'target' | 'details' | 'acceptanceCriteria' | 'risk'>>;
+  fields?: Partial<
+    Pick<
+      Ticket,
+      'summary' | 'changeType' | 'target' | 'details' | 'acceptanceCriteria' | 'risk' | 'branch' | 'commitSha' | 'changedFiles'
+    >
+  >;
   data?: Record<string, unknown>;
   onlyFrom?: TicketStatus;
 }
@@ -65,7 +70,7 @@ export class TicketsService {
       relations: { site: true, createdBy: true },
       order: { updatedAt: 'DESC' },
     });
-    return tickets.map(toTicketView);
+    return tickets.map((ticket) => toTicketView(ticket, user.role === 'agency'));
   }
 
   async get(user: User, id: number): Promise<TicketDetailView> {
@@ -82,7 +87,7 @@ export class TicketsService {
     });
 
     return {
-      ...toTicketView(ticket),
+      ...toTicketView(ticket, user.role === 'agency'),
       events: events.map((event) => toTicketEventView(event, user.role === 'agency')),
       allowedTransitions: user.role === 'agency' ? [...TICKET_TRANSITIONS[ticket.status]] : [],
     };

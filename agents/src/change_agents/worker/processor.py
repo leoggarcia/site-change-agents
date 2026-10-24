@@ -16,6 +16,8 @@ from typing import Any
 
 from bullmq.custom_errors import UnrecoverableError
 
+from change_agents.llm import is_daily_quota_error
+
 logger = logging.getLogger(__name__)
 
 Handler = Callable[[dict[str, Any]], dict[str, Any]]
@@ -40,6 +42,9 @@ def make_processor(stage: str, handler: Handler, timeout_seconds: float, report:
         except Exception as error:
             if isinstance(error, TimeoutError):
                 error = StageTimeout(f"no result after {timeout_seconds:g} seconds")
+            elif is_daily_quota_error(error):
+                # Retrying in a few seconds can't help; stop now so a person can decide.
+                error = UnrecoverableError(f"The model's daily quota is used up: {str(error)[:200]}")
             will_retry = attempt < attempts and not isinstance(error, UnrecoverableError)
             outcome = "retrying" if will_retry else "failed"
             logger.warning("%s job %s %s: %s: %s", stage, job.id, outcome, type(error).__name__, error)

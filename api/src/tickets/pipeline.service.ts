@@ -18,6 +18,7 @@ import { TicketsService } from './tickets.service.js';
 import type { Actor } from './tickets.service.js';
 
 const SYSTEM: Actor = { type: 'system' };
+const CODER: Actor = { type: 'agent', agent: 'coder' };
 const STAGE_NAMES: Record<Stage, string> = { intake: 'Intake', coding: 'Coding', review: 'Review', reindex: 'Reindex' };
 
 /**
@@ -79,7 +80,15 @@ export class PipelineService implements OnApplicationBootstrap {
     const run = await this.tickets.countEntries(ticket.id, 'in_progress');
     await this.codingQueue.add(
       'code',
-      { ticketId: ticket.id, siteId: ticket.siteId, summary: ticket.summary ?? ticket.request, details: ticket.details ?? '' },
+      {
+        ticketId: ticket.id,
+        siteId: ticket.siteId,
+        summary: ticket.summary ?? ticket.request,
+        details: ticket.details ?? ticket.request,
+        changeType: ticket.changeType,
+        target: ticket.target,
+        acceptanceCriteria: ticket.acceptanceCriteria ?? [],
+      },
       { jobId: `coding-${ticket.id}-${run}` },
     );
   }
@@ -137,9 +146,19 @@ export class PipelineService implements OnApplicationBootstrap {
         const result = report.result;
         if (isAttemptFailure(result)) {
           await this.failStage(ticketId, 'in_progress', 'The change could not be made.', result.error);
-        } else if (
-          await this.tickets.changeStatus(ticketId, 'in_review', { type: 'agent', agent: 'coder' }, result.summary, {
+        } else if (result.status === 'needs_human') {
+          // The coder stopped on purpose (not allowed, build still failing, too big): a person takes over.
+          await this.tickets.changeStatus(ticketId, 'needs_human', CODER, 'This change needs a person from the agency.', {
             onlyFrom: 'in_progress',
+            data: { reasoning: result.message, error: result.buildOutput ?? undefined, usage: result.usage },
+          });
+          await this.dispatch((await this.tickets.findById(ticketId)).siteId);
+        } else if (
+          await this.tickets.changeStatus(ticketId, 'in_review', CODER, 'The change is made and is being checked.', {
+            onlyFrom: 'in_progress',
+            // The technical summary (files, values) is for the agency; clients see the message above.
+            data: { reasoning: result.summary, usage: result.usage, seconds: result.seconds, buildRounds: result.buildRounds },
+            fields: { branch: result.branch, commitSha: result.commit, changedFiles: result.files },
           })
         ) {
           await this.addReviewJob(await this.tickets.findById(ticketId));

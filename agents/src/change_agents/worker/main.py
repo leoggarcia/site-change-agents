@@ -15,7 +15,7 @@ from change_agents.intake.context import load_context
 from change_agents.intake.graph import build_intake_graph
 from change_agents.intake.runner import IntakeRunner
 from change_agents.llm import chat_model
-from change_agents.worker.handlers import make_intake_handler, reindex, stub_coding, stub_review
+from change_agents.worker.handlers import make_coding_handler, make_intake_handler, reindex, stub_review
 from change_agents.worker.processor import make_processor
 from change_agents.worker.watchdog import watch
 
@@ -23,10 +23,10 @@ from change_agents.worker.watchdog import watch
 RESULTS_QUEUE = "agent-results"
 
 # (handler, how many jobs at once in this process, time limit in seconds)
-# coding: at most 2 tickets are being coded at the same time. Model calls also share one rate limiter.
+# coding: at most 2 tickets are being coded at the same time. Model calls share one rate limiter per model.
 STAGES = {
     "intake": (None, 2, 180),
-    "coding": (stub_coding, 2, 600),
+    "coding": (None, 2, 900),
     "review": (stub_review, 2, 300),
     "reindex": (reindex, 1, 900),
 }
@@ -48,7 +48,10 @@ async def run() -> None:
 
     with postgres_checkpointer() as checkpointer:
         intake_graph = build_intake_graph(chat_model(settings.intake_model), load_context, checkpointer)
-        handlers = {"intake": make_intake_handler(IntakeRunner(intake_graph))}
+        handlers = {
+            "intake": make_intake_handler(IntakeRunner(intake_graph)),
+            "coding": make_coding_handler(chat_model(settings.coder_model)),
+        }
 
         workers = []
         for name, (handler, concurrency, timeout) in STAGES.items():
