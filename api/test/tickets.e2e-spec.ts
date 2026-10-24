@@ -2,36 +2,86 @@ import { ValidationPipe } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getDataSourceToken } from '@nestjs/typeorm';
+import { Queue, Worker } from 'bullmq';
+import type { Job } from 'bullmq';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import type { DataSource } from 'typeorm';
-import { AgentsClient } from '../src/agents/agents.client.js';
-import type { IntakeResult } from '../src/agents/agents.client.js';
+import type { AgentReport, IntakeJob, IntakeResult } from '../src/agents/agent-results.js';
 import { AppModule } from '../src/app.module.js';
-import { IntakeService } from '../src/tickets/intake.service.js';
+import { AGENT_RESULTS_QUEUE, CODING_QUEUE, INTAKE_QUEUE, REINDEX_QUEUE, REVIEW_QUEUE } from '../src/queues/queues.js';
 import { TicketsService } from '../src/tickets/tickets.service.js';
 import type { UserView } from '../src/users/users.controller.js';
-import { resetTestDatabase, TEST_DATABASE_URL } from './setup-database.js';
+import { resetTestDatabase, resetTestRedis, TEST_DATABASE_URL, TEST_REDIS_URL } from './setup-database.js';
 
-/** Stands in for the Python agents service. With no scripted reply, a call never finishes (the ticket stays in intake). */
-class FakeAgents {
-  replies: (IntakeResult | Error)[] = [];
-  calls: string[] = [];
+type Report = Omit<AgentReport, 'stage' | 'result'> & { stage: string; result: unknown };
 
-  startIntake(ticketId: number, _siteId: string, text: string): Promise<IntakeResult> {
-    this.calls.push(`start ${ticketId}: ${text}`);
-    return this.reply();
+/**
+ * Stands in for the Python workers: takes jobs from the real queues and reports scripted results.
+ * Intake jobs with no scripted reply report nothing (as if the agent were still thinking).
+ * Coding and review jobs succeed at once, unless held (`holdCoding`) or scripted to fail.
+ */
+class FakeWorkers {
+  intakeReplies: IntakeResult[] = [];
+  intakeJobs: IntakeJob[] = [];
+  holdCoding = false;
+  failNextCoding = false;
+  heldCoding = new Map<number, Job>();
+  private readonly connection = { url: TEST_REDIS_URL };
+  private readonly results = new Queue(AGENT_RESULTS_QUEUE, { connection: this.connection });
+  private readonly workers: Worker[] = [];
+
+  start(): void {
+    this.listen(INTAKE_QUEUE, async (job: Job<IntakeJob>) => {
+      this.intakeJobs.push(job.data);
+      const reply = this.intakeReplies.shift();
+      if (reply) await this.report(job, 'intake', reply);
+    });
+    this.listen(CODING_QUEUE, async (job: Job<{ ticketId: number }>) => {
+      if (this.failNextCoding) {
+        this.failNextCoding = false;
+        await this.report(job, 'coding', { status: 'retrying', error: 'RuntimeError: provider down' }, 1);
+        await this.report(job, 'coding', { status: 'failed', error: 'RuntimeError: provider down' }, 2);
+      } else if (this.holdCoding) {
+        this.heldCoding.set(job.data.ticketId, job);
+      } else {
+        await this.report(job, 'coding', { status: 'done', summary: 'Changed the phone number.' });
+      }
+    });
+    this.listen(REVIEW_QUEUE, (job: Job) => this.report(job, 'review', { status: 'approved', summary: 'Looks right.' }));
   }
 
-  answerIntake(ticketId: number, answer: string): Promise<IntakeResult> {
-    this.calls.push(`answer ${ticketId}: ${answer}`);
-    return this.reply();
+  async releaseCoding(ticketId: number): Promise<void> {
+    const job = this.heldCoding.get(ticketId)!;
+    this.heldCoding.delete(ticketId);
+    await this.report(job, 'coding', { status: 'done', summary: 'Changed the phone number.' });
   }
 
-  private reply(): Promise<IntakeResult> {
-    const next = this.replies.shift();
-    if (!next) return new Promise(() => {});
-    return next instanceof Error ? Promise.reject(next) : Promise.resolve(next);
+  async close(): Promise<void> {
+    await Promise.all(this.workers.map((worker) => worker.close()));
+    await this.results.close();
+  }
+
+  private listen(name: string, process: (job: Job) => Promise<void>): void {
+    this.workers.push(new Worker(name, process, { connection: this.connection }));
+  }
+
+  private async report(job: Job, stage: string, result: unknown, attempt = 1): Promise<void> {
+    const report: Report = { stage, jobId: job.id!, ticketId: job.data.ticketId, attempt, attempts: 2, result };
+    await this.results.add('result', report, { jobId: `${stage}-${job.id}-${attempt}-${(result as { status: string }).status}` });
+  }
+}
+
+/** Waits until `check` stops throwing (the pipeline runs through queues, so results arrive a bit later). */
+async function eventually<T>(check: () => Promise<T>, timeoutMs = 8000): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      return await check();
+    } catch (error) {
+      if (Date.now() > deadline) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
   }
 }
 
@@ -39,33 +89,53 @@ describe('Tickets (e2e)', () => {
   let app: INestApplication<App>;
   let sofia: UserView; // Luna Café owner
   let emily: UserView; // BrightSmile Dental owner
+  let robert: UserView; // Northside Accounting owner
   let agency: UserView;
-  let intake: IntakeService;
-  const agents = new FakeAgents();
+  const workers = new FakeWorkers();
 
   const as = (user: UserView) => ({ 'X-Demo-User-Id': user.id });
+  const createAs = async (user: UserView, siteId: string, text: string) =>
+    (await request(app.getHttpServer()).post('/api/tickets').set(as(user)).send({ siteId, request: text }).expect(201)).body
+      .id as number;
+  const getAs = async (user: UserView, id: number) =>
+    (await request(app.getHttpServer()).get(`/api/tickets/${id}`).set(as(user)).expect(200)).body;
+  const statusOf = async (id: number) => (await getAs(agency, id)).status as string;
+  const ready = (summary: string): IntakeResult => ({
+    status: 'ticket',
+    ticket: {
+      summary,
+      change_type: 'content_update',
+      target: { page: 'global', section: 'Footer' },
+      details: 'Change 618 123 4567 to 618 765 4321',
+      acceptance_criteria: ['The footer shows 618 765 4321'],
+      risk: 'low',
+    },
+    reasoning: 'The client gave the new number.',
+    sources: ['Plan › What the plan includes'],
+  });
 
   beforeAll(async () => {
     await resetTestDatabase();
+    await resetTestRedis();
     process.env.DATABASE_URL = TEST_DATABASE_URL;
+    process.env.REDIS_URL = TEST_REDIS_URL;
 
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(AgentsClient)
-      .useValue(agents)
-      .compile();
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api');
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     await app.init();
-    intake = app.get(IntakeService);
+    workers.start();
 
     const users = (await request(app.getHttpServer()).get('/api/demo-users').expect(200)).body as UserView[];
     sofia = users.find((user) => user.email === 'sofia@lunacafe.example')!;
     emily = users.find((user) => user.email === 'emily@brightsmile.example')!;
+    robert = users.find((user) => user.email === 'robert@northside-accounting.example')!;
     agency = users.find((user) => user.role === 'agency')!;
   });
 
   afterAll(async () => {
+    await workers.close();
     await app.close();
   });
 
@@ -86,7 +156,7 @@ describe('Tickets (e2e)', () => {
     expect(all.body).toHaveLength(3);
   });
 
-  it('creates a ticket in "intake" with a "created" event', async () => {
+  it('creates a ticket in "intake" with a "created" event, and queues its intake', async () => {
     const created = await request(app.getHttpServer())
       .post('/api/tickets')
       .set(as(sofia))
@@ -100,10 +170,20 @@ describe('Tickets (e2e)', () => {
       createdBy: { name: 'Sofia Ramirez' },
     });
 
-    const detail = await request(app.getHttpServer()).get(`/api/tickets/${created.body.id}`).set(as(sofia)).expect(200);
-    expect(detail.body.events).toHaveLength(1);
-    expect(detail.body.events[0]).toMatchObject({ type: 'created', toStatus: 'intake', actor: { type: 'user', name: 'Sofia Ramirez' } });
-    expect(detail.body.allowedTransitions).toEqual([]);
+    const detail = await getAs(sofia, created.body.id);
+    expect(detail.events).toHaveLength(1);
+    expect(detail.events[0]).toMatchObject({ type: 'created', toStatus: 'intake', actor: { type: 'user', name: 'Sofia Ramirez' } });
+    expect(detail.allowedTransitions).toEqual([]);
+
+    await eventually(async () =>
+      expect(workers.intakeJobs.at(-1)).toEqual({
+        ticketId: created.body.id,
+        threadId: `ticket-${created.body.id}-intake-1`,
+        action: 'start',
+        siteId: 'luna-cafe',
+        request: 'Change the phone number in the footer',
+      }),
+    );
   });
 
   it("does not let a client request changes to someone else's site", async () => {
@@ -124,13 +204,9 @@ describe('Tickets (e2e)', () => {
   });
 
   it("hides other clients' tickets", async () => {
-    const created = await request(app.getHttpServer())
-      .post('/api/tickets')
-      .set(as(emily))
-      .send({ siteId: 'brightsmile-dental', request: 'Update our Friday hours' })
-      .expect(201);
+    const id = await createAs(emily, 'brightsmile-dental', 'Update our Friday hours');
 
-    await request(app.getHttpServer()).get(`/api/tickets/${created.body.id}`).set(as(sofia)).expect(404);
+    await request(app.getHttpServer()).get(`/api/tickets/${id}`).set(as(sofia)).expect(404);
 
     const sofiasList = await request(app.getHttpServer()).get('/api/tickets').set(as(sofia)).expect(200);
     expect(sofiasList.body.every((ticket: { siteId: string }) => ticket.siteId === 'luna-cafe')).toBe(true);
@@ -140,27 +216,22 @@ describe('Tickets (e2e)', () => {
   });
 
   it('lets only the agency change status, following the allowed transitions', async () => {
-    const created = await request(app.getHttpServer())
-      .post('/api/tickets')
-      .set(as(sofia))
-      .send({ siteId: 'luna-cafe', request: 'Add a testimonials section' })
-      .expect(201);
-    const id = created.body.id as number;
+    const id = await createAs(sofia, 'luna-cafe', 'Add a testimonials section');
 
-    await request(app.getHttpServer()).patch(`/api/tickets/${id}/status`).set(as(sofia)).send({ status: 'pending' }).expect(403);
+    await request(app.getHttpServer()).patch(`/api/tickets/${id}/status`).set(as(sofia)).send({ status: 'needs_human' }).expect(403);
 
     const moved = await request(app.getHttpServer())
       .patch(`/api/tickets/${id}/status`)
       .set(as(agency))
-      .send({ status: 'pending', message: 'Looks clear, queueing it.' })
+      .send({ status: 'needs_human', message: 'I will handle this one.' })
       .expect(200);
-    expect(moved.body.status).toBe('pending');
-    expect(moved.body.allowedTransitions).toEqual(['in_progress', 'needs_human', 'failed']);
+    expect(moved.body.status).toBe('needs_human');
+    expect(moved.body.allowedTransitions).toEqual(['intake', 'pending', 'failed']);
     expect(moved.body.events.at(-1)).toMatchObject({
       type: 'status_changed',
       fromStatus: 'intake',
-      toStatus: 'pending',
-      message: 'Looks clear, queueing it.',
+      toStatus: 'needs_human',
+      message: 'I will handle this one.',
       actor: { name: 'Agency team' },
     });
 
@@ -174,39 +245,22 @@ describe('Tickets (e2e)', () => {
   });
 
   describe('intake', () => {
-    const createAs = async (user: UserView, siteId: string, text: string) =>
-      (await request(app.getHttpServer()).post('/api/tickets').set(as(user)).send({ siteId, request: text }).expect(201))
-        .body.id as number;
-    const getAs = async (user: UserView, id: number) =>
-      (await request(app.getHttpServer()).get(`/api/tickets/${id}`).set(as(user)).expect(200)).body;
-
-    it('asks the client a question, then turns the answer into a ticket', async () => {
-      agents.replies.push({ status: 'question', question: 'What is the new phone number?', number: 1, max: 3 });
+    it('asks a question, turns the answer into a ticket, and runs it through coding and review', async () => {
+      workers.intakeReplies.push({ status: 'question', question: 'What is the new phone number?', number: 1, max: 3 });
       const id = await createAs(sofia, 'luna-cafe', 'Change the phone number');
-      await intake.settled(id);
 
-      let ticket = await getAs(sofia, id);
-      expect(ticket.status).toBe('intake');
-      expect(ticket.pendingQuestion).toEqual({ question: 'What is the new phone number?', number: 1, max: 3 });
-      expect(ticket.events.at(-1)).toMatchObject({ type: 'agent_question', actor: { type: 'agent', name: 'intake agent' } });
+      const asked = await eventually(async () => {
+        const ticket = await getAs(sofia, id);
+        expect(ticket.pendingQuestion).toEqual({ question: 'What is the new phone number?', number: 1, max: 3 });
+        return ticket;
+      });
+      expect(asked.events.at(-1)).toMatchObject({ type: 'agent_question', actor: { type: 'agent', name: 'intake agent' } });
 
       // Only the client who owns the site answers.
       await request(app.getHttpServer()).post(`/api/tickets/${id}/answer`).set(as(agency)).send({ answer: 'x' }).expect(403);
       await request(app.getHttpServer()).post(`/api/tickets/${id}/answer`).set(as(emily)).send({ answer: 'x' }).expect(404);
 
-      agents.replies.push({
-        status: 'ticket',
-        ticket: {
-          summary: 'Update the phone number in the footer',
-          change_type: 'content_update',
-          target: { page: 'global', section: 'Footer' },
-          details: 'Change 618 123 4567 to 618 765 4321',
-          acceptance_criteria: ['The footer shows 618 765 4321'],
-          risk: 'low',
-        },
-        reasoning: 'The client gave the new number.',
-        sources: ['Luna Café plan: Basic › What the plan includes'],
-      });
+      workers.intakeReplies.push(ready('Update the phone number in the footer'));
       const answered = await request(app.getHttpServer())
         .post(`/api/tickets/${id}/answer`)
         .set(as(sofia))
@@ -214,54 +268,59 @@ describe('Tickets (e2e)', () => {
         .expect(201);
       expect(answered.body.pendingQuestion).toBeNull();
       expect(answered.body.events.at(-1)).toMatchObject({ type: 'client_answer', message: '618 765 4321' });
-      expect(agents.calls.at(-1)).toBe(`answer ${id}: 618 765 4321`);
 
-      await intake.settled(id);
-      ticket = await getAs(sofia, id);
-      expect(ticket).toMatchObject({
-        status: 'pending',
+      const done = await eventually(async () => {
+        const ticket = await getAs(sofia, id);
+        expect(ticket.status).toBe('awaiting_approval');
+        return ticket;
+      });
+      expect(workers.intakeJobs.at(-1)).toMatchObject({ action: 'answer', answer: '618 765 4321', questionNumber: 1 });
+      expect(done).toMatchObject({
         summary: 'Update the phone number in the footer',
         changeType: 'content_update',
         target: { page: 'global', section: 'Footer' },
-        acceptanceCriteria: ['The footer shows 618 765 4321'],
         risk: 'low',
       });
-      expect(ticket.events.at(-1)).toMatchObject({
-        type: 'status_changed',
-        toStatus: 'pending',
-        sources: ['Luna Café plan: Basic › What the plan includes'],
-        reasoning: null, // internal, hidden from the client
-      });
-      expect((await getAs(agency, id)).events.at(-1).reasoning).toBe('The client gave the new number.');
+      const steps = done.events
+        .filter((event: { type: string }) => event.type === 'status_changed')
+        .map((event: { toStatus: string; actor: { name: string } }) => `${event.toStatus} by ${event.actor.name}`);
+      expect(steps).toEqual([
+        'pending by intake agent',
+        'in_progress by System',
+        'in_review by coder agent',
+        'awaiting_approval by reviewer agent',
+      ]);
+      const queued = done.events.find((event: { toStatus: string }) => event.toStatus === 'pending');
+      expect(queued).toMatchObject({ sources: ['Plan › What the plan includes'], reasoning: null }); // reasoning is agency-only
+      const forAgency = (await getAs(agency, id)).events.find((event: { toStatus: string }) => event.toStatus === 'pending');
+      expect(forAgency.reasoning).toBe('The client gave the new number.');
 
       await request(app.getHttpServer()).post(`/api/tickets/${id}/answer`).set(as(sofia)).send({ answer: 'again' }).expect(409);
     });
 
     it('hands out-of-scope requests to the agency, citing the plan', async () => {
-      agents.replies.push({
+      workers.intakeReplies.push({
         status: 'out_of_scope',
         message: 'Online ordering is not included in your Basic plan.',
         sources: ['Luna Café plan: Basic › What the plan does not include'],
       });
       const id = await createAs(sofia, 'luna-cafe', 'Let customers order online');
-      await intake.settled(id);
 
-      const ticket = await getAs(sofia, id);
-      expect(ticket).toMatchObject({ status: 'needs_human', changeType: 'out_of_scope' });
+      const ticket = await eventually(async () => {
+        const current = await getAs(sofia, id);
+        expect(current.status).toBe('needs_human');
+        return current;
+      });
+      expect(ticket.changeType).toBe('out_of_scope');
       expect(ticket.events.at(-1)).toMatchObject({ message: 'Online ordering is not included in your Basic plan.' });
     });
 
-    it('hands off to a person when the agents service fails, and can run again', async () => {
-      agents.replies.push(new Error('Agents service answered 500'));
+    it('starts a new conversation when the agency sends a ticket back to intake', async () => {
       const id = await createAs(sofia, 'luna-cafe', 'Change the opening hours');
-      await intake.settled(id);
-
-      const ticket = await getAs(agency, id);
-      expect(ticket.status).toBe('needs_human');
-      expect(ticket.events.at(-1)).toMatchObject({ actor: { type: 'system' }, toStatus: 'needs_human' });
-
+      await request(app.getHttpServer()).patch(`/api/tickets/${id}/status`).set(as(agency)).send({ status: 'needs_human' }).expect(200);
       await request(app.getHttpServer()).patch(`/api/tickets/${id}/status`).set(as(agency)).send({ status: 'intake' }).expect(200);
-      expect(agents.calls.at(-1)).toBe(`start ${id}: Change the opening hours`);
+
+      await eventually(async () => expect(workers.intakeJobs.at(-1)).toMatchObject({ threadId: `ticket-${id}-intake-2` }));
     });
 
     it("drops an agent's result when the agency already moved the ticket", async () => {
@@ -270,6 +329,65 @@ describe('Tickets (e2e)', () => {
 
       expect(await app.get(TicketsService).recordQuestion(id, { question: 'Late question?', number: 1, max: 3 })).toBe(false);
       expect((await getAs(agency, id)).pendingQuestion).toBeNull();
+    });
+  });
+
+  describe('pipeline', () => {
+    it('codes only one ticket per site at a time, in order', async () => {
+      workers.holdCoding = true;
+      workers.intakeReplies.push(ready('First change'));
+      const first = await createAs(robert, 'northside-accounting', 'First change please');
+      await eventually(async () => expect(await statusOf(first)).toBe('in_progress'));
+
+      workers.intakeReplies.push(ready('Second change'));
+      const second = await createAs(robert, 'northside-accounting', 'Second change please');
+      await eventually(async () => expect(await statusOf(second)).toBe('pending'));
+
+      // Another site is not blocked.
+      workers.intakeReplies.push(ready('Other site'));
+      const other = await createAs(emily, 'brightsmile-dental', 'Other site change');
+      await eventually(async () => expect(await statusOf(other)).toBe('in_progress'));
+      expect(await statusOf(second)).toBe('pending');
+
+      workers.holdCoding = false;
+      await workers.releaseCoding(first);
+      await eventually(async () => expect(await statusOf(first)).toBe('awaiting_approval'));
+      await eventually(async () => expect(await statusOf(second)).toBe('awaiting_approval'));
+      await workers.releaseCoding(other);
+      await eventually(async () => expect(await statusOf(other)).toBe('awaiting_approval'));
+    });
+
+    it('shows retries in the history and fails the ticket after the last attempt', async () => {
+      workers.failNextCoding = true;
+      workers.intakeReplies.push(ready('A change that keeps failing'));
+      const id = await createAs(robert, 'northside-accounting', 'A change that keeps failing');
+
+      const failed = await eventually(async () => {
+        const ticket = await getAs(agency, id);
+        expect(ticket.status).toBe('failed');
+        return ticket;
+      });
+      expect(failed.events.slice(-2)).toMatchObject([
+        { type: 'note', message: 'Coding attempt 1 of 2 failed. Trying again shortly.', error: 'RuntimeError: provider down' },
+        { type: 'status_changed', toStatus: 'failed', actor: { type: 'system' } },
+      ]);
+      // The technical error is for the agency only.
+      expect((await getAs(robert, id)).events.at(-1).error).toBeNull();
+
+      // Sending it back to "pending" codes it again (and the site is free, so right away).
+      await request(app.getHttpServer()).patch(`/api/tickets/${id}/status`).set(as(agency)).send({ status: 'pending' }).expect(200);
+      await eventually(async () => expect(await statusOf(id)).toBe('awaiting_approval'));
+    });
+
+    it('queues one reindex per site at a time, for the agency only', async () => {
+      await request(app.getHttpServer()).post('/api/sites/luna-cafe/reindex').set(as(sofia)).expect(403);
+      await request(app.getHttpServer()).post('/api/sites/luna-cafe/reindex').set(as(agency)).expect(202);
+      await request(app.getHttpServer()).post('/api/sites/luna-cafe/reindex').set(as(agency)).expect(202);
+
+      const queue = new Queue(REINDEX_QUEUE, { connection: { url: TEST_REDIS_URL } });
+      const waiting = await queue.getWaiting();
+      await queue.close();
+      expect(waiting.map((job) => job.data)).toEqual([{ siteId: 'luna-cafe' }]); // the second request was deduplicated
     });
   });
 });

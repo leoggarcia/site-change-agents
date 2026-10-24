@@ -1,0 +1,68 @@
+import type { Stage } from '../queues/queues.js';
+import type { ChangeType, PendingQuestion, RiskLevel, TicketTarget } from '../tickets/ticket.entity.js';
+
+/** The ticket the Intake Agent writes (agents/src/change_agents/intake/schema.py, TicketDraft). */
+export interface IntakeTicket {
+  summary: string;
+  change_type: Exclude<ChangeType, 'out_of_scope'>;
+  target: TicketTarget;
+  details: string;
+  acceptance_criteria: string[];
+  risk: RiskLevel;
+}
+
+interface IntakeTrace {
+  reasoning?: string | null;
+  sources?: string[];
+  usage?: Record<string, number>;
+}
+
+/** Where an intake conversation stands after each job (agents/src/change_agents/intake/runner.py). */
+export type IntakeResult =
+  | ({ status: 'question' } & PendingQuestion & IntakeTrace)
+  | ({ status: 'ticket'; ticket: IntakeTicket } & IntakeTrace)
+  | ({ status: 'out_of_scope' | 'needs_human'; message: string } & IntakeTrace);
+
+/** Coding and review results. Stubs until Phases 5 and 6 replace them with the real agents. */
+export type CodingResult = { status: 'done'; summary: string };
+export type ReviewResult = { status: 'approved'; summary: string };
+export type ReindexResult = { status: 'done'; code: Record<string, number>; knowledge: Record<string, number> };
+
+/** Sent by the worker instead of a result when an attempt fails. */
+export type AttemptFailure = { status: 'retrying' | 'failed'; error: string };
+
+/** One message on the agent-results queue (agents/src/change_agents/worker/processor.py). */
+export type AgentReport = {
+  jobId: string;
+  ticketId: number | null;
+  attempt: number;
+  attempts: number;
+} & (
+  | { stage: 'intake'; result: IntakeResult | AttemptFailure }
+  | { stage: 'coding'; result: CodingResult | AttemptFailure }
+  | { stage: 'review'; result: ReviewResult | AttemptFailure }
+  | { stage: 'reindex'; result: ReindexResult | AttemptFailure }
+);
+
+// Job data the API sends to each queue.
+export type IntakeJob =
+  | { ticketId: number; threadId: string; action: 'start'; siteId: string; request: string }
+  | { ticketId: number; threadId: string; action: 'answer'; answer: string; questionNumber: number };
+
+export interface CodingJob {
+  ticketId: number;
+  siteId: string;
+  summary: string;
+  details: string;
+}
+
+export interface ReviewJob {
+  ticketId: number;
+  siteId: string;
+}
+
+export interface ReindexJob {
+  siteId: string;
+}
+
+export type { Stage };

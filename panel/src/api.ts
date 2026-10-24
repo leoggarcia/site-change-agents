@@ -54,6 +54,7 @@ export const api = {
   me: () => request<User>('/me'),
   sites: () => request<Site[]>('/sites'),
   siteSummary: (siteId: string) => request<ProjectSummaryRecord>(`/sites/${siteId}/summary`),
+  reindex: (siteId: string) => request<{ queued: true }>(`/sites/${siteId}/reindex`, { method: 'POST' }),
   tickets: () => request<Ticket[]>('/tickets'),
   ticket: (id: number) => request<TicketDetail>(`/tickets/${id}`),
   createTicket: (siteId: string, text: string) =>

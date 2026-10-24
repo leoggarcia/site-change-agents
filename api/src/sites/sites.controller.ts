@@ -1,4 +1,4 @@
-import { Controller, Get, NotFoundException, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { DemoAuthGuard } from '../auth/demo-auth.guard.js';
 import type { User } from '../users/user.entity.js';
@@ -30,5 +30,12 @@ export class SitesController {
       throw new NotFoundException('This site has not been indexed yet.');
     }
     return summary;
+  }
+
+  @Post(':id/reindex')
+  @HttpCode(202)
+  async reindex(@CurrentUser() user: User, @Param('id') id: string): Promise<{ queued: true }> {
+    await this.sitesService.reindex(user, id);
+    return { queued: true };
   }
 }

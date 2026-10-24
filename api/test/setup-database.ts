@@ -1,3 +1,4 @@
+import { Redis } from 'ioredis';
 import { Client as PgClient } from 'pg';
 import { DataSource } from 'typeorm';
 import { dataSourceOptions, LOCAL_DATABASE_URL } from '../src/database/data-source.js';
@@ -19,4 +20,13 @@ export async function resetTestDatabase(): Promise<void> {
   await dataSource.runMigrations();
   await seedDemoData(dataSource);
   await dataSource.destroy();
+}
+
+export const TEST_REDIS_URL = process.env.TEST_REDIS_URL ?? 'redis://localhost:6379/1';
+
+/** Empties the test Redis database (its own database number, so local queues are left alone). */
+export async function resetTestRedis(): Promise<void> {
+  const redis = new Redis(TEST_REDIS_URL);
+  await redis.flushdb();
+  redis.disconnect();
 }

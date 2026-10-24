@@ -2,6 +2,9 @@
 
 The thread id is the key of the saved state. Start and resume can run in different processes,
 or days apart: everything the graph needs is loaded from the checkpointer.
+
+Both calls are safe to repeat, because queue jobs are retried after failures: a repeated call
+continues from the last checkpoint instead of starting over or answering twice.
 """
 
 from collections.abc import Callable
@@ -25,16 +28,27 @@ class IntakeRunner:
         self.on_update = on_update
 
     def start(self, thread_id: str, site_id: str, request: str) -> dict[str, Any]:
-        # Starting always means a fresh conversation, even if this thread ran before.
-        self.graph.checkpointer.delete_thread(thread_id)
-        self._run(initial_state(site_id, request), thread_id)
+        snapshot = self.graph.get_state(_config(thread_id))
+        if not snapshot.values:
+            self._run(initial_state(site_id, request), thread_id)
+        elif snapshot.next and not snapshot.interrupts:
+            # A previous attempt crashed mid-way: input None means "continue from the last checkpoint".
+            self._run(None, thread_id)
         return self.result(thread_id)
 
-    def resume(self, thread_id: str, answer: str) -> dict[str, Any]:
-        if not self.graph.get_state(_config(thread_id)).interrupts:
+    def resume(self, thread_id: str, answer: str, question_number: int | None = None) -> dict[str, Any]:
+        snapshot = self.graph.get_state(_config(thread_id))
+        if snapshot.interrupts:
+            pending = snapshot.interrupts[0].value["number"]
+            if question_number is not None and pending != question_number:
+                # This answer was already used and the graph has asked something else since.
+                return self.result(thread_id)
+            # Command(resume=...) becomes the return value of the interrupt() call that paused the graph.
+            self._run(Command(resume=answer), thread_id)
+        elif snapshot.next:
+            self._run(None, thread_id)  # the answer was taken in by an attempt that crashed afterwards
+        elif not snapshot.values:
             raise NotWaitingForAnswer(f"Thread {thread_id} is not waiting for an answer.")
-        # Command(resume=...) becomes the return value of the interrupt() call that paused the graph.
-        self._run(Command(resume=answer), thread_id)
         return self.result(thread_id)
 
     def result(self, thread_id: str) -> dict[str, Any]:
@@ -57,7 +71,3 @@ class IntakeRunner:
 
 def _config(thread_id: str) -> dict:
     return {"configurable": {"thread_id": thread_id}}
-
-
-def ticket_thread(ticket_id: int) -> str:
-    return f"ticket-{ticket_id}-intake"

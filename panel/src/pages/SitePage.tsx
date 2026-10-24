@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { api } from '../api'
 import { formatDate } from '../statuses'
@@ -39,6 +40,7 @@ function Summary({ record }: { record: ProjectSummaryRecord }) {
           {summary.framework} · indexed {formatDate(record.createdAt)} from <code>{record.sourceRef}</code>
         </p>
         <p>{summary.overview}</p>
+        <ReindexButton siteId={record.siteId} />
         <p className="muted small">
           {record.model} · {stats.turns} turns · {stats.model_calls} model calls · {stats.input_tokens?.toLocaleString()}{' '}
           input / {stats.output_tokens?.toLocaleString()} output tokens · {stats.duration_seconds}s
@@ -122,5 +124,30 @@ function Summary({ record }: { record: ProjectSummaryRecord }) {
         )}
       </section>
     </>
+  )
+}
+
+/** Queues a reindex job: the site's code and client knowledge are embedded again where they changed. */
+function ReindexButton({ siteId }: { siteId: string }) {
+  const [state, setState] = useState<'idle' | 'sending' | 'queued' | 'error'>('idle')
+
+  async function reindex() {
+    setState('sending')
+    try {
+      await api.reindex(siteId)
+      setState('queued')
+    } catch {
+      setState('error')
+    }
+  }
+
+  return (
+    <p className="inline-actions">
+      <button type="button" className="secondary" onClick={reindex} disabled={state === 'sending'}>
+        Re-index for search
+      </button>
+      {state === 'queued' && <span className="muted">Queued. Only changed files are embedded again.</span>}
+      {state === 'error' && <span className="error">Could not queue the reindex.</span>}
+    </p>
   )
 }

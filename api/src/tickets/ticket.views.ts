@@ -32,6 +32,8 @@ export interface TicketEventView {
   sources: string[];
   /** The agent's internal note on why it decided this. Only shown to the agency. */
   reasoning: string | null;
+  /** Technical error behind a failure or retry. Only shown to the agency. */
+  error: string | null;
   createdAt: Date;
 }
 
@@ -77,6 +79,7 @@ export function toTicketEventView(event: TicketEvent, forAgency: boolean): Ticke
     message: event.message,
     sources: Array.isArray(event.data?.sources) ? (event.data.sources as string[]) : [],
     reasoning: forAgency && typeof event.data?.reasoning === 'string' ? event.data.reasoning : null,
+    error: forAgency && typeof event.data?.error === 'string' ? event.data.error : null,
     createdAt: event.createdAt,
   };
 }

@@ -8,16 +8,24 @@ import { formatDate, STATUS_INFO } from '../statuses'
 import type { TicketDetail, TicketEvent, TicketStatus } from '../types'
 import { useLoad } from '../useLoad'
 
-/** How often to check the ticket while the Intake Agent is working. */
+/** How often to check the ticket while an agent is working on it. */
 const POLL_MS = 3000
+
+/** What the client sees while an agent works on each step. */
+const WORKING_MESSAGES: Partial<Record<TicketStatus, string>> = {
+  intake: 'Our assistant is reading your request. This usually takes less than a minute.',
+  in_progress: 'The change is being made.',
+  in_review: 'The change is being checked before you see it.',
+}
 
 export function TicketPage() {
   const id = Number(useParams().id)
   const { user } = useAuth()
   const { data: ticket, error, loading, setData } = useLoad(() => api.ticket(id), [id])
 
-  // The agent works in the background; check again until it asks something or finishes.
-  const agentWorking = ticket?.status === 'intake' && !ticket.pendingQuestion
+  // Agents work in the background (queue jobs); check again until one asks something or finishes.
+  const workingMessage = ticket && !ticket.pendingQuestion ? WORKING_MESSAGES[ticket.status] : undefined
+  const agentWorking = workingMessage !== undefined
   useEffect(() => {
     if (!agentWorking) return
     const timer = setTimeout(() => {
@@ -66,7 +74,7 @@ export function TicketPage() {
       {agentWorking && (
         <section className="card working" aria-live="polite">
           <span className="pulse" aria-hidden="true" />
-          Our assistant is reading your request. This usually takes less than a minute.
+          {workingMessage}
         </section>
       )}
 
@@ -255,6 +263,7 @@ function EventLine({ event }: { event: TicketEvent }) {
           </ul>
         )}
         {event.reasoning && <p className="agent-note">Agent’s note (agency only): {event.reasoning}</p>}
+        {event.error && <p className="agent-note">Error (agency only): {event.error}</p>}
       </div>
       <time className="muted nowrap">{formatDate(event.createdAt)}</time>
     </>

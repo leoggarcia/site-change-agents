@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "LangGraph agents for Site Change Agents: intake, coder, reviewer and project indexer"
 requires-python = ">=3.13"
 dependencies = [
+    "bullmq>=3.4.3",
     "fastapi[standard]>=0.161.1",
     "langchain>=1.4.7",
     "langchain-anthropic>=1.7.6",
@@ -23,6 +24,7 @@ rag-index = "change_agents.rag.cli:index_main"
 rag-search = "change_agents.rag.cli:search_main"
 rag-eval = "change_agents.rag.evaluate:main"
 intake-chat = "change_agents.intake.cli:main"
+agents-worker = "change_agents.worker.main:main"
 
 [dependency-groups]
 dev = [

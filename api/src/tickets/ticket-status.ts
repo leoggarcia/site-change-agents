@@ -26,6 +26,9 @@ export const TICKET_TRANSITIONS: Record<TicketStatus, readonly TicketStatus[]> =
   needs_human: ['intake', 'pending', 'failed'],
 };
 
+/** While a site has a ticket in one of these, no other ticket of that site starts coding. */
+export const SITE_BUSY_STATUSES: readonly TicketStatus[] = ['in_progress', 'in_review'];
+
 export function canTransition(from: TicketStatus, to: TicketStatus): boolean {
   return TICKET_TRANSITIONS[from].includes(to);
 }

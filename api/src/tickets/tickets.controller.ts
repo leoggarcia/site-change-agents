@@ -6,7 +6,7 @@ import { AnswerQuestionDto } from './dto/answer-question.dto.js';
 import { ChangeStatusDto } from './dto/change-status.dto.js';
 import { CreateTicketDto } from './dto/create-ticket.dto.js';
 import { ListTicketsQuery } from './dto/list-tickets.query.js';
-import { IntakeService } from './intake.service.js';
+import { PipelineService } from './pipeline.service.js';
 import { TicketsService } from './tickets.service.js';
 import type { TicketDetailView, TicketView } from './ticket.views.js';
 
@@ -15,14 +15,14 @@ import type { TicketDetailView, TicketView } from './ticket.views.js';
 export class TicketsController {
   constructor(
     private readonly ticketsService: TicketsService,
-    private readonly intakeService: IntakeService,
+    private readonly pipeline: PipelineService,
   ) {}
 
   @Post()
   async create(@CurrentUser() user: User, @Body() dto: CreateTicketDto): Promise<TicketView> {
     const ticket = await this.ticketsService.create(user, dto);
-    // Answers right away; the Intake Agent works in the background and the panel polls the ticket.
-    this.intakeService.start(ticket);
+    // Answers right away; an intake job runs the agent and the panel polls the ticket.
+    await this.pipeline.startIntake(ticket);
     return ticket;
   }
 
@@ -43,10 +43,9 @@ export class TicketsController {
     @Body() dto: ChangeStatusDto,
   ): Promise<TicketDetailView> {
     await this.ticketsService.changeStatus(id, dto.status, { type: 'user', user }, dto.message);
-    const ticket = await this.ticketsService.get(user, id);
-    // Sending a ticket back to "intake" (from "needs_human") runs the Intake Agent again from the start.
-    if (dto.status === 'intake') this.intakeService.start(ticket);
-    return ticket;
+    // e.g. back to "intake" runs the Intake Agent again; "pending" queues the ticket for coding.
+    await this.pipeline.afterManualChange(await this.ticketsService.findById(id));
+    return this.ticketsService.get(user, id);
   }
 
   @Post(':id/answer')
@@ -55,7 +54,7 @@ export class TicketsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AnswerQuestionDto,
   ): Promise<TicketDetailView> {
-    await this.intakeService.answer(user, id, dto.answer);
+    await this.pipeline.answer(user, id, dto.answer);
     return this.ticketsService.get(user, id);
   }
 }

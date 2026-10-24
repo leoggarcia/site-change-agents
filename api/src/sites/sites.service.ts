@@ -1,6 +1,10 @@
+import { InjectQueue } from '@nestjs/bullmq';
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import type { Queue } from 'bullmq';
 import { Repository } from 'typeorm';
+import type { ReindexJob } from '../agents/agent-results.js';
+import { REINDEX_QUEUE } from '../queues/queues.js';
 import type { User } from '../users/user.entity.js';
 import { ProjectSummary } from './project-summary.entity.js';
 import { Site } from './site.entity.js';
@@ -10,6 +14,7 @@ export class SitesService {
   constructor(
     @InjectRepository(Site) private readonly sites: Repository<Site>,
     @InjectRepository(ProjectSummary) private readonly summaries: Repository<ProjectSummary>,
+    @InjectQueue(REINDEX_QUEUE) private readonly reindexQueue: Queue<ReindexJob>,
   ) {}
 
   /** Sites the user may see: their own as a client, all of them as agency staff. */
@@ -39,5 +44,18 @@ export class SitesService {
     }
     await this.getAccessible(user, siteId);
     return this.summaries.findOne({ where: { siteId }, order: { createdAt: 'DESC' } });
+  }
+
+  /**
+   * Queues a RAG re-index of the site. Only changed files are embedded again, so it is cheap.
+   * While one reindex of the site is waiting, more requests are dropped (deduplication).
+   * From Phase 7 the deploy webhook calls this after every deploy.
+   */
+  async reindex(user: User, siteId: string): Promise<void> {
+    if (user.role !== 'agency') {
+      throw new ForbiddenException('Only the agency can re-index a site.');
+    }
+    await this.getAccessible(user, siteId);
+    await this.reindexQueue.add('reindex', { siteId }, { deduplication: { id: `reindex-${siteId}` } });
   }
 }

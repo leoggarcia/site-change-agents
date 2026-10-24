@@ -57,6 +57,8 @@ export interface TicketEvent {
   sources: string[]
   /** The agent's internal note; only sent to the agency. */
   reasoning: string | null
+  /** Technical error behind a failure or retry; only sent to the agency. */
+  error: string | null
   createdAt: string
 }
 

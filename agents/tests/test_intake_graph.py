@@ -61,6 +61,23 @@ class Retriever:
         }
 
 
+def _raising(model: ScriptedModel):  # noqa: ANN202
+    """A structured model whose call raises the scripted exception, like a provider outage."""
+
+    def with_structured_output(schema, include_raw=False):  # noqa: ANN001
+        class Structured:
+            def invoke(self, messages: list[BaseMessage]) -> dict:
+                model.calls.append(messages)
+                reply = model.replies.pop(0)
+                if isinstance(reply, Exception):
+                    raise reply
+                return {"raw": AIMessage(content=""), "parsed": reply, "parsing_error": None}
+
+        return Structured()
+
+    return with_structured_output
+
+
 def make_runner(replies: list[IntakeDecision | Exception]) -> tuple[IntakeRunner, ScriptedModel, Retriever]:
     model, retriever = ScriptedModel(replies), Retriever()
     graph = build_intake_graph(model, retriever, InMemorySaver())
@@ -143,12 +160,38 @@ def test_out_of_scope_needs_no_questions() -> None:
     assert result["qa"] == []
 
 
-def test_resume_requires_a_pending_question() -> None:
-    runner, _, _ = make_runner([ticket()])
-    runner.start("t7", "luna-cafe", "Change the phone to 618 765 4321")
+def test_repeated_calls_do_not_redo_work() -> None:
+    # Queue jobs can run twice (a retry after a crash). Each repeat must return the same state.
+    runner, model, _ = make_runner([ask("What is the new phone number?"), ticket()])
 
+    first = runner.start("t7", "luna-cafe", "Change the phone number")
+    assert runner.start("t7", "luna-cafe", "Change the phone number") == first
+
+    done = runner.resume("t7", "618 765 4321", question_number=1)
+    assert runner.resume("t7", "618 765 4321", question_number=1) == done
+    assert done["status"] == "ticket"
+    assert len(model.calls) == 2
+
+
+def test_continues_after_a_crash_mid_run() -> None:
+    model = ScriptedModel([RuntimeError("provider down")])
+    model.with_structured_output = _raising(model)  # type: ignore[method-assign]
+    retriever = Retriever()
+    runner = IntakeRunner(build_intake_graph(model, retriever, InMemorySaver()))
+
+    with pytest.raises(RuntimeError):
+        runner.start("t8", "luna-cafe", "Change the phone to 618 765 4321")
+
+    model.replies = [ticket()]
+    result = runner.start("t8", "luna-cafe", "Change the phone to 618 765 4321")
+    assert result["status"] == "ticket"
+    assert len(retriever.queries) == 1  # retrieve was checkpointed, so the retry skipped it
+
+
+def test_answering_an_unknown_thread_fails() -> None:
+    runner, _, _ = make_runner([])
     with pytest.raises(NotWaitingForAnswer):
-        runner.resume("t7", "hello")
+        runner.resume("missing", "hello")
 
 
 def test_decision_must_fill_the_field_of_its_action() -> None:
