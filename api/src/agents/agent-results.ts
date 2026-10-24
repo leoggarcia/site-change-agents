@@ -41,8 +41,32 @@ export type CodingResult = {
   | { status: 'needs_human'; message: string; buildOutput?: string | null }
 );
 
-/** Review results. A stub until Phase 6 replaces it with the Reviewer Agent. */
-export type ReviewResult = { status: 'approved'; summary: string };
+/** One automatic check on a branch (agents/src/change_agents/reviewer/checks.py). */
+export interface CheckResult {
+  name: string;
+  passed: boolean;
+  level: 'blocking' | 'warning';
+  details: string;
+  findings: string[];
+}
+
+export interface ReviewIssue {
+  severity: 'blocker' | 'major' | 'minor';
+  file: string | null;
+  problem: string;
+  fix: string;
+}
+
+/** What the checks and the Reviewer Agent return (agents/src/change_agents/reviewer/graph.py). */
+export interface ReviewResult {
+  status: 'approved' | 'changes_requested';
+  decidedBy: 'checks' | 'reviewer';
+  summary: string;
+  issues: ReviewIssue[];
+  criteria: { criterion: string; met: boolean; evidence: string }[];
+  checks: CheckResult[];
+  usage?: Record<string, number>;
+}
 export type ReindexResult = { status: 'done'; code: Record<string, number>; knowledge: Record<string, number> };
 
 /** Sent by the worker instead of a result when an attempt fails. */
@@ -75,11 +99,21 @@ export interface CodingJob {
   changeType: string | null;
   target: { page: string; section: string } | null;
   acceptanceCriteria: string[];
+  /** Set when the reviewer asked for changes: continue on the branch from `commit` and fix `feedback`. */
+  revision?: { commit: string; feedback: ReviewIssue[] };
 }
 
+/** What the reviewer needs: the ticket, the client's own words and the branch to review. */
 export interface ReviewJob {
   ticketId: number;
   siteId: string;
+  summary: string;
+  details: string;
+  acceptanceCriteria: string[];
+  request: string;
+  conversation: { question: string; answer: string }[];
+  branch: string;
+  commit: string;
 }
 
 export interface ReindexJob {

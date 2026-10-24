@@ -27,6 +27,10 @@ class FakeWorkers {
   holdCoding = false;
   failNextCoding = false;
   codingNeedsHuman = false;
+  /** Scripted review verdicts; with none left, reviews approve. */
+  reviewVerdicts: ('approved' | 'changes_requested')[] = [];
+  codingJobs: { ticketId: number; revision?: { commit: string } }[] = [];
+  reviewJobs: { ticketId: number; conversation: unknown[]; commit: string }[] = [];
   heldCoding = new Map<number, Job>();
   private readonly connection = { url: TEST_REDIS_URL };
   private readonly results = new Queue(AGENT_RESULTS_QUEUE, { connection: this.connection });
@@ -39,6 +43,7 @@ class FakeWorkers {
       if (reply) await this.report(job, 'intake', reply);
     });
     this.listen(CODING_QUEUE, async (job: Job<{ ticketId: number }>) => {
+      this.codingJobs.push(job.data);
       if (this.failNextCoding) {
         this.failNextCoding = false;
         await this.report(job, 'coding', { status: 'retrying', error: 'RuntimeError: provider down' }, 1);
@@ -56,7 +61,18 @@ class FakeWorkers {
         await this.report(job, 'coding', codingDone(job.data.ticketId));
       }
     });
-    this.listen(REVIEW_QUEUE, (job: Job) => this.report(job, 'review', { status: 'approved', summary: 'Looks right.' }));
+    this.listen(REVIEW_QUEUE, async (job: Job) => {
+      this.reviewJobs.push(job.data);
+      const status = this.reviewVerdicts.shift() ?? 'approved';
+      await this.report(job, 'review', {
+        status,
+        decidedBy: 'reviewer',
+        summary: status === 'approved' ? 'Looks right.' : 'The digits are wrong.',
+        issues: status === 'approved' ? [] : [{ severity: 'major', file: 'src/data/business.json', problem: 'Wrong digits.', fix: 'Use 618 765 4321.' }],
+        criteria: [{ criterion: 'The footer shows 618 765 4321', met: status === 'approved', evidence: 'business.json' }],
+        checks: [{ name: 'Build', passed: true, level: 'blocking', details: 'npm run build', findings: [] }],
+      });
+    });
   }
 
   async releaseCoding(ticketId: number): Promise<void> {
@@ -311,6 +327,12 @@ describe('Tickets (e2e)', () => {
         'in_review by coder agent',
         'awaiting_approval by reviewer agent',
       ]);
+      // The reviewer got the intake conversation: the client's answer is part of the request.
+      expect(workers.reviewJobs.at(-1)).toMatchObject({
+        ticketId: id,
+        commit: 'abc123',
+        conversation: [{ question: 'What is the new phone number?', answer: '618 765 4321' }],
+      });
       const queued = done.events.find((event: { toStatus: string }) => event.toStatus === 'pending');
       expect(queued).toMatchObject({ sources: ['Plan › What the plan includes'], reasoning: null }); // reasoning is agency-only
       const agencyView = await getAs(agency, id);
@@ -432,6 +454,31 @@ describe('Tickets (e2e)', () => {
         reasoning: "This change can't be made automatically: it needs an external script.",
       });
       await eventually(async () => expect(await statusOf(next)).toBe('awaiting_approval'));
+    });
+
+    it('sends a rejected change back to the coder, then to a person after two reviews', async () => {
+      workers.reviewVerdicts.push('changes_requested', 'changes_requested');
+      workers.intakeReplies.push(ready('Fix the phone digits'));
+      const id = await createAs(robert, 'northside-accounting', 'Fix the phone digits please');
+
+      await eventually(async () => expect(await statusOf(id)).toBe('needs_human'));
+      const ticket = await getAs(agency, id);
+      const steps = ticket.events
+        .filter((event: { type: string }) => event.type === 'status_changed')
+        .map((event: { toStatus: string; actor: { name: string } }) => `${event.toStatus} by ${event.actor.name}`);
+      expect(steps).toEqual([
+        'pending by intake agent',
+        'in_progress by System',
+        'in_review by coder agent',
+        'in_progress by reviewer agent', // sent back with the issues
+        'in_review by coder agent',
+        'needs_human by reviewer agent', // second review failed too
+      ]);
+      // The second coding run revised the branch instead of starting over.
+      const runs = workers.codingJobs.filter((job) => job.ticketId === id);
+      expect(runs.map((job) => job.revision?.commit ?? null)).toEqual([null, 'abc123']);
+      expect(ticket.events.at(-1).review.issues[0]).toMatchObject({ severity: 'major', problem: 'Wrong digits.' });
+      expect((await getAs(robert, id)).events.at(-1).review).toBeNull(); // review details are for the agency
     });
   });
 });

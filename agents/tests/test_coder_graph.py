@@ -68,12 +68,15 @@ class FakeWorkspace:
     def diff_stat(self) -> DiffStat:
         return DiffStat(sorted(self.editor.changed), 1, 1)
 
+    def branch_stat(self) -> DiffStat:
+        return self.diff_stat()
+
     def commit(self, message: str) -> str:
         self.commits.append(message)
         return "abc123"
 
 
-def run(tmp_path: Path, plans, replies, builds=()):  # noqa: ANN001, ANN201
+def run(tmp_path: Path, plans, replies, builds=(), ticket=TICKET):  # noqa: ANN001, ANN201
     (tmp_path / "src" / "data").mkdir(parents=True)
     (tmp_path / "src" / "data" / "business.json").write_text('{"phone": "618 123 4567"}')
     (tmp_path / "package.json").write_text("{}")
@@ -81,7 +84,7 @@ def run(tmp_path: Path, plans, replies, builds=()):  # noqa: ANN001, ANN201
     workspace = FakeWorkspace(editor, list(builds))
     model = ScriptedModel(list(plans), list(replies))
     graph = build_coder_graph(model, make_coder_tools(editor, []), editor, workspace, lambda ticket: "<relevant_files/>")
-    state = graph.invoke(initial_state(TICKET), {"recursion_limit": 60})
+    state = graph.invoke(initial_state(ticket), {"recursion_limit": 60})
     return state, model, workspace, tmp_path
 
 
@@ -146,3 +149,14 @@ def test_the_turn_limit_lives_in_code(tmp_path: Path) -> None:
 
     assert state["turns"] == MAX_EDIT_TURNS
     assert state["outcome"]["status"] == "needs_human"
+
+
+def test_a_revision_gets_the_review_feedback(tmp_path: Path) -> None:
+    feedback = [{"severity": "major", "file": "src/data/business.json", "problem": "Wrong digits.", "fix": "Use 618 765 4321."}]
+    state, model, workspace, _ = run(
+        tmp_path, [GOOD_PLAN], [edit_phone(), AIMessage(content="Fixed the digits.")], ticket={**TICKET, "feedback": feedback}
+    )
+
+    assert "<review_feedback>" in model.calls[0][1].content  # the plan sees it
+    assert "Wrong digits. Fix: Use 618 765 4321." in model.calls[1][1].content  # and so does the edit loop
+    assert workspace.commits[0].startswith("Address review comments: Update the phone number")

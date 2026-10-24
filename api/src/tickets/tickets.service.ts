@@ -2,6 +2,7 @@ import { ConflictException, ForbiddenException, Injectable, NotFoundException } 
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import type { EntityManager, FindOptionsWhere } from 'typeorm';
+import type { ReviewIssue } from '../agents/agent-results.js';
 import { SitesService } from '../sites/sites.service.js';
 import type { User } from '../users/user.entity.js';
 import type { CreateTicketDto } from './dto/create-ticket.dto.js';
@@ -162,6 +163,33 @@ export class TicketsService {
       `SELECT DISTINCT site_id FROM tickets WHERE status = 'pending'`,
     );
     return rows.map((row) => row.site_id);
+  }
+
+  /** If the ticket is in_progress because the reviewer sent it back: the commit and issues to fix (for recovery). */
+  async pendingRevision(ticket: Ticket): Promise<{ commit: string; feedback: ReviewIssue[] } | undefined> {
+    const last = await this.events.findOne({
+      where: { ticketId: ticket.id, toStatus: 'in_progress' },
+      order: { id: 'DESC' },
+    });
+    if (!ticket.commitSha || last?.actorAgent !== 'reviewer') return undefined;
+    return { commit: ticket.commitSha, feedback: (last.data?.issues as ReviewIssue[] | undefined) ?? [] };
+  }
+
+  /** The questions and answers of the latest intake run, in order. The reviewer needs them: answers can correct the request. */
+  async intakeConversation(id: number): Promise<{ question: string; answer: string }[]> {
+    const rows: { type: string; message: string }[] = await this.dataSource.query(
+      `SELECT type, message FROM ticket_events
+       WHERE ticket_id = $1 AND type IN ('agent_question', 'client_answer')
+         AND id > (SELECT max(id) FROM ticket_events WHERE ticket_id = $1 AND to_status = 'intake')
+       ORDER BY id`,
+      [id],
+    );
+    const pairs: { question: string; answer: string }[] = [];
+    for (const row of rows) {
+      if (row.type === 'agent_question') pairs.push({ question: row.message, answer: '' });
+      else if (pairs.length) pairs[pairs.length - 1].answer = row.message;
+    }
+    return pairs;
   }
 
   /** The client's answer in the current intake run that the agent hasn't asked a new question after, if any. */

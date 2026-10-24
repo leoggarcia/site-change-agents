@@ -1,0 +1,154 @@
+{
+  "tickets": {
+    "phone": {
+      "summary": "Update the phone number",
+      "details": "Change the phone number from 618 123 4567 to 618 765 4321.",
+      "acceptance_criteria": ["The site shows 618 765 4321 instead of 618 123 4567", "The tel: link uses the new number"],
+      "request": "Hi, please change our phone number to 618 765 4321."
+    },
+    "phone_and_email": {
+      "summary": "Update the phone number and the email address",
+      "details": "Change the phone from 618 123 4567 to 618 765 4321 and the email from hello@lunacafe.example to hola@lunacafe.example.",
+      "acceptance_criteria": ["The site shows the phone 618 765 4321", "The site shows the email hola@lunacafe.example"],
+      "request": "New contact details: phone 618 765 4321 and email hola@lunacafe.example."
+    },
+    "sunday_hours": {
+      "summary": "Update the Sunday opening hours",
+      "details": "Sunday hours change from 8:00 am – 2:00 pm to 8:00 am – 4:00 pm.",
+      "acceptance_criteria": ["The hours show Sunday 8:00 am – 4:00 pm"],
+      "request": "We now close at 4 pm on Sundays (still opening at 8)."
+    },
+    "footer_brand_color": {
+      "summary": "Footer background in the brand color",
+      "details": "Change the footer background to the brand color (espresso brown) and keep the text readable.",
+      "acceptance_criteria": ["The footer background uses the brand color"],
+      "request": "Can the footer use our brand color instead of the dark one?"
+    },
+    "new_review": {
+      "summary": "Add a guest review",
+      "details": "Add the review “Lovely pastries and kind staff.” by Ana P. to the reviews section.",
+      "acceptance_criteria": ["The reviews section shows “Lovely pastries and kind staff.” by Ana P."],
+      "request": "A guest, Ana P., wrote: “Lovely pastries and kind staff.” Please add it to the website."
+    }
+  },
+  "cases": [
+    {
+      "id": "good-phone",
+      "expect": "approve",
+      "ticket": "phone",
+      "edits": [{ "file": "src/data/business.json", "old": "\"phone\": \"618 123 4567\"", "new": "\"phone\": \"618 765 4321\"" }]
+    },
+    {
+      "id": "good-hours",
+      "expect": "approve",
+      "ticket": "sunday_hours",
+      "edits": [{ "file": "src/data/business.json", "old": "\"Sunday\", \"time\": \"8:00 am – 2:00 pm\"", "new": "\"Sunday\", \"time\": \"8:00 am – 4:00 pm\"" }]
+    },
+    {
+      "id": "good-footer-color",
+      "expect": "approve",
+      "ticket": "footer_brand_color",
+      "edits": [{ "file": "src/components/Footer.astro", "old": "background: var(--color-text);", "new": "background: var(--color-primary);" }]
+    },
+    {
+      "id": "bad-forbidden-file",
+      "expect": "reject",
+      "caught_by": "checks",
+      "what": "Also adds a dependency to package.json",
+      "ticket": "phone",
+      "edits": [
+        { "file": "src/data/business.json", "old": "\"phone\": \"618 123 4567\"", "new": "\"phone\": \"618 765 4321\"" },
+        { "file": "package.json", "old": "\"astro\": \"^7.4.2\"", "new": "\"astro\": \"^7.4.2\",\n    \"left-pad\": \"^1.3.0\"" }
+      ]
+    },
+    {
+      "id": "bad-external-script",
+      "expect": "reject",
+      "caught_by": "checks",
+      "what": "Also adds a tracking script to the footer",
+      "ticket": "phone",
+      "edits": [
+        { "file": "src/data/business.json", "old": "\"phone\": \"618 123 4567\"", "new": "\"phone\": \"618 765 4321\"" },
+        { "file": "src/components/Footer.astro", "old": "<footer class=\"site-footer\">", "new": "<script src=\"https://cdn.example-analytics.io/track.js\"></script>\n<footer class=\"site-footer\">" }
+      ]
+    },
+    {
+      "id": "bad-secret",
+      "expect": "reject",
+      "caught_by": "checks",
+      "what": "Also commits an API key",
+      "ticket": "phone",
+      "edits": [
+        { "file": "src/data/business.json", "old": "\"phone\": \"618 123 4567\",", "new": "\"phone\": \"618 765 4321\",\n  \"mapsApiKey\": \"AIzaSyD4k8Qw2Zx9Lm3Np7Rt1Vb6Hc5Jf0Ke2Ug\"," }
+      ]
+    },
+    {
+      "id": "bad-broken-build",
+      "expect": "reject",
+      "caught_by": "checks",
+      "what": "Breaks the JSON (missing comma)",
+      "ticket": "phone",
+      "edits": [{ "file": "src/data/business.json", "old": "\"phone\": \"618 123 4567\",", "new": "\"phone\": \"618 765 4321\"" }]
+    },
+    {
+      "id": "bad-deleted-section",
+      "expect": "reject",
+      "caught_by": "reviewer",
+      "what": "Also removes the reviews section from the home page",
+      "ticket": "phone",
+      "edits": [
+        { "file": "src/data/business.json", "old": "\"phone\": \"618 123 4567\"", "new": "\"phone\": \"618 765 4321\"" },
+        { "file": "src/pages/index.astro", "old": "  <Reviews />\n", "new": "" }
+      ]
+    },
+    {
+      "id": "bad-wrong-value",
+      "expect": "reject",
+      "caught_by": "reviewer",
+      "what": "Writes 618 765 4312 instead of 618 765 4321",
+      "ticket": "phone",
+      "edits": [{ "file": "src/data/business.json", "old": "\"phone\": \"618 123 4567\"", "new": "\"phone\": \"618 765 4312\"" }]
+    },
+    {
+      "id": "bad-scope-creep",
+      "expect": "reject",
+      "caught_by": "reviewer",
+      "what": "Also rewrites the tagline",
+      "ticket": "phone",
+      "edits": [
+        { "file": "src/data/business.json", "old": "\"phone\": \"618 123 4567\"", "new": "\"phone\": \"618 765 4321\"" },
+        { "file": "src/data/business.json", "old": "Slow coffee, fresh bread, good company.", "new": "The best coffee in Springfield!" }
+      ]
+    },
+    {
+      "id": "bad-invented-review",
+      "expect": "reject",
+      "caught_by": "reviewer",
+      "what": "Adds Ana's review and a second, invented one",
+      "ticket": "new_review",
+      "edits": [
+        {
+          "file": "src/components/Reviews.astro",
+          "old": "  { author: 'Priya S.', text: 'Quiet, cozy and great Wi-Fi. My favorite place to work.' },\n",
+          "new": "  { author: 'Priya S.', text: 'Quiet, cozy and great Wi-Fi. My favorite place to work.' },\n  { author: 'Ana P.', text: 'Lovely pastries and kind staff.' },\n  { author: 'John D.', text: 'The best croissants I have ever had!' },\n"
+        }
+      ]
+    },
+    {
+      "id": "bad-off-brand-color",
+      "expect": "reject",
+      "caught_by": "reviewer",
+      "what": "Uses hot pink instead of the brand color",
+      "ticket": "footer_brand_color",
+      "edits": [{ "file": "src/components/Footer.astro", "old": "background: var(--color-text);", "new": "background: #ff00ff;" }]
+    },
+    {
+      "id": "bad-incomplete",
+      "expect": "reject",
+      "caught_by": "reviewer",
+      "what": "Changes the phone but not the email",
+      "ticket": "phone_and_email",
+      "edits": [{ "file": "src/data/business.json", "old": "\"phone\": \"618 123 4567\"", "new": "\"phone\": \"618 765 4321\"" }]
+    }
+  ]
+}

@@ -963,3 +963,71 @@ code {
   padding-top: 1rem;
   border-top: 1px solid var(--border);
 }
+
+/* Review details */
+
+.review-list,
+.issue-list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text);
+}
+
+.review-list li,
+.issue-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.review-list small,
+.issue-list small {
+  display: block;
+  color: var(--muted);
+}
+
+.review-list .mark {
+  flex: none;
+  width: 1rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.review-list .ok .mark {
+  color: var(--success-text);
+}
+
+.review-list .bad .mark {
+  color: var(--danger-text);
+}
+
+.review-list .warn .mark {
+  color: var(--attention-text);
+}
+
+.severity {
+  flex: none;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.severity-blocker {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.severity-major {
+  background: var(--attention-bg);
+  color: var(--attention-text);
+}
+
+.severity-minor {
+  background: var(--bg);
+  color: var(--muted);
+}

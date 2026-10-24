@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent, KeyboardEvent, ReactNode } from 'react'
 import { api } from '../api'
 import { STATUS_INFO } from '../statuses'
-import type { TicketDetail, TicketEvent, TicketStatus } from '../types'
+import type { ReviewDetails, TicketDetail, TicketEvent, TicketStatus } from '../types'
 import { Icon } from './Icon'
 import type { IconName } from './Icon'
 import { StatusBadge } from './StatusBadge'
@@ -37,6 +37,7 @@ type Item =
       sources: string[]
       note: string | null
       error: string | null
+      review: ReviewDetails | null
     }
   | { kind: 'line'; id: string; icon: IconName; tone: Tone; text: string; time: string; error: string | null }
 
@@ -115,6 +116,7 @@ function toItems(ticket: TicketDetail, isAgency: boolean): Item[] {
       sources: event.sources,
       note: event.reasoning,
       error: event.error,
+      review: event.review,
       ...extra,
     })
 
@@ -176,6 +178,7 @@ function MessageView({ item }: { item: Extract<Item, { kind: 'message' }> }) {
             ))}
           </ul>
         )}
+        {item.review && <ReviewSummary review={item.review} />}
         {item.note && (
           <Details summary="Agent’s note · agency only">
             <p>{item.note}</p>
@@ -188,6 +191,61 @@ function MessageView({ item }: { item: Extract<Item, { kind: 'message' }> }) {
         )}
       </div>
     </li>
+  )
+}
+
+function ReviewSummary({ review }: { review: ReviewDetails }) {
+  const blocking = review.checks.filter((check) => check.level === 'blocking')
+  const passed = blocking.filter((check) => check.passed).length
+  const met = review.criteria.filter((item) => item.met).length
+  const parts = [`Checks ${passed}/${blocking.length}`]
+  if (review.criteria.length) parts.push(`criteria ${met}/${review.criteria.length}`)
+  parts.push(review.issues.length ? `${review.issues.length} issue${review.issues.length > 1 ? 's' : ''}` : 'no issues')
+
+  return (
+    <Details summary={`Review: ${parts.join(' · ')} · agency only`}>
+      <ul className="review-list">
+        {review.checks.map((check) => (
+          <li key={check.name} className={check.passed ? 'ok' : check.level === 'blocking' ? 'bad' : 'warn'}>
+            <span className="mark" aria-hidden="true">
+              {check.passed ? '✓' : check.level === 'blocking' ? '✗' : '!'}
+            </span>
+            <span>
+              {check.name}
+              {check.findings.length > 0 && <small>{check.findings.slice(0, 3).join(' · ')}</small>}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {review.criteria.length > 0 && (
+        <ul className="review-list">
+          {review.criteria.map((item) => (
+            <li key={item.criterion} className={item.met ? 'ok' : 'bad'}>
+              <span className="mark" aria-hidden="true">
+                {item.met ? '✓' : '✗'}
+              </span>
+              <span>
+                {item.criterion}
+                <small>{item.evidence}</small>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {review.issues.length > 0 && (
+        <ul className="issue-list">
+          {review.issues.map((issue, index) => (
+            <li key={index}>
+              <span className={`severity severity-${issue.severity}`}>{issue.severity}</span>
+              <span>
+                {issue.file && <code>{issue.file}</code>} {issue.problem}
+                <small>Fix: {issue.fix}</small>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Details>
   )
 }
 

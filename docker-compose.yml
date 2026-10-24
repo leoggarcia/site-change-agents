@@ -80,8 +80,6 @@ services:
       REDIS_URL: redis://redis:6379
       SITES_REPOS_DIR: /repos
       KNOWLEDGE_DIR: /knowledge
-      # Until Phase 6: share of stub review jobs that fail on purpose, to see retries.
-      STUB_FAILURE_RATE: ${STUB_FAILURE_RATE:-0}
       # One clone per ticket, and the npm cache they share.
       WORKSPACES_DIR: /work/workspaces
       NPM_CACHE_DIR: /work/npm-cache

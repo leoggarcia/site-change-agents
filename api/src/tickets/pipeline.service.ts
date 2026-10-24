@@ -5,6 +5,7 @@ import type { Queue } from 'bullmq';
 import type {
   AgentReport,
   AttemptFailure,
+  ReviewResult,
   CodingJob,
   IntakeJob,
   IntakeResult,
@@ -19,6 +20,9 @@ import type { Actor } from './tickets.service.js';
 
 const SYSTEM: Actor = { type: 'system' };
 const CODER: Actor = { type: 'agent', agent: 'coder' };
+const REVIEWER: Actor = { type: 'agent', agent: 'reviewer' };
+/** Reviews per ticket before a person takes over: the first one and the one after the coder's fixes. */
+const MAX_REVIEW_ROUNDS = 2;
 const STAGE_NAMES: Record<Stage, string> = { intake: 'Intake', coding: 'Coding', review: 'Review', reindex: 'Reindex' };
 
 /**
@@ -76,7 +80,7 @@ export class PipelineService implements OnApplicationBootstrap {
     if (ticket) await this.addCodingJob(ticket);
   }
 
-  private async addCodingJob(ticket: Ticket): Promise<void> {
+  private async addCodingJob(ticket: Ticket, revision?: CodingJob['revision']): Promise<void> {
     const run = await this.tickets.countEntries(ticket.id, 'in_progress');
     await this.codingQueue.add(
       'code',
@@ -88,6 +92,7 @@ export class PipelineService implements OnApplicationBootstrap {
         changeType: ticket.changeType,
         target: ticket.target,
         acceptanceCriteria: ticket.acceptanceCriteria ?? [],
+        ...(revision && { revision }),
       },
       { jobId: `coding-${ticket.id}-${run}` },
     );
@@ -95,7 +100,21 @@ export class PipelineService implements OnApplicationBootstrap {
 
   private async addReviewJob(ticket: Ticket): Promise<void> {
     const run = await this.tickets.countEntries(ticket.id, 'in_review');
-    await this.reviewQueue.add('review', { ticketId: ticket.id, siteId: ticket.siteId }, { jobId: `review-${ticket.id}-${run}` });
+    await this.reviewQueue.add(
+      'review',
+      {
+        ticketId: ticket.id,
+        siteId: ticket.siteId,
+        summary: ticket.summary ?? ticket.request,
+        details: ticket.details ?? ticket.request,
+        acceptanceCriteria: ticket.acceptanceCriteria ?? [],
+        request: ticket.request,
+        conversation: await this.tickets.intakeConversation(ticket.id),
+        branch: ticket.branch!,
+        commit: ticket.commitSha!,
+      },
+      { jobId: `review-${ticket.id}-${run}` },
+    );
   }
 
   /** Follow-up after the agency changes a status by hand in the panel. */
@@ -171,13 +190,54 @@ export class PipelineService implements OnApplicationBootstrap {
         if (isAttemptFailure(result)) {
           await this.failStage(ticketId, 'in_review', 'The change could not be reviewed.', result.error);
         } else {
-          await this.tickets.changeStatus(ticketId, 'awaiting_approval', { type: 'agent', agent: 'reviewer' }, result.summary, {
-            onlyFrom: 'in_review',
-          });
-          await this.dispatch((await this.tickets.findById(ticketId)).siteId);
+          await this.saveReview(ticketId, result);
         }
       }
     }
+  }
+
+  /**
+   * Approved: on to the client's approval. Changes requested: back to the coder with the issues, up to
+   * MAX_REVIEW_ROUNDS reviews; after that a person decides, so agents can't loop forever.
+   */
+  private async saveReview(ticketId: number, result: ReviewResult): Promise<void> {
+    const ticket = await this.tickets.findById(ticketId);
+    const data = {
+      reasoning: result.summary,
+      decidedBy: result.decidedBy,
+      checks: result.checks,
+      issues: result.issues,
+      criteria: result.criteria,
+      usage: result.usage,
+    };
+
+    if (result.status === 'approved') {
+      await this.tickets.changeStatus(ticketId, 'awaiting_approval', REVIEWER, 'The change passed the automatic checks and the review.', {
+        onlyFrom: 'in_review',
+        data,
+      });
+      await this.dispatch(ticket.siteId);
+      return;
+    }
+
+    const reviews = await this.tickets.countEntries(ticketId, 'in_review');
+    if (reviews < MAX_REVIEW_ROUNDS) {
+      const moved = await this.tickets.changeStatus(
+        ticketId,
+        'in_progress',
+        REVIEWER,
+        'The review found something to fix, so the change is being corrected.',
+        { onlyFrom: 'in_review', data },
+      );
+      if (moved) await this.addCodingJob(ticket, { commit: ticket.commitSha!, feedback: result.issues });
+      return;
+    }
+
+    await this.tickets.changeStatus(ticketId, 'needs_human', REVIEWER, 'This change needs a person from the agency.', {
+      onlyFrom: 'in_review',
+      data,
+    });
+    await this.dispatch(ticket.siteId);
   }
 
   private async failStage(ticketId: number, from: 'in_progress' | 'in_review', message: string, error: string): Promise<void> {
@@ -234,7 +294,7 @@ export class PipelineService implements OnApplicationBootstrap {
    */
   private async recover(): Promise<void> {
     for (const ticket of await this.tickets.findInFlight()) {
-      if (ticket.status === 'in_progress') await this.addCodingJob(ticket);
+      if (ticket.status === 'in_progress') await this.addCodingJob(ticket, await this.tickets.pendingRevision(ticket));
       else if (ticket.status === 'in_review') await this.addReviewJob(ticket);
       else if (!ticket.pendingQuestion) {
         const answer = await this.tickets.unprocessedAnswer(ticket.id);

@@ -50,6 +50,7 @@ Locator = Callable[[dict[str, Any]], str]
 class WorkspaceLike(Protocol):
     def build(self) -> BuildResult: ...
     def diff_stat(self) -> DiffStat: ...
+    def branch_stat(self) -> DiffStat: ...
     def commit(self, message: str) -> str: ...
 
 
@@ -79,6 +80,21 @@ def ticket_text(ticket: dict[str, Any]) -> str:
         f"Details: {ticket.get('details') or ''}\n"
         f"Done when:\n{criteria or '- (not given)'}\n"
         "</ticket>"
+    ) + _feedback_text(ticket)
+
+
+def _feedback_text(ticket: dict[str, Any]) -> str:
+    """On a revision: the reviewer's issues. The branch already holds the previous attempt."""
+    feedback = ticket.get("feedback") or []
+    if not feedback:
+        return ""
+    issues = "\n".join(
+        f"- [{item['severity']}] {item.get('file') or ''} {item['problem']} Fix: {item['fix']}".replace("  ", " ")
+        for item in feedback
+    )
+    return (
+        "\n\n<review_feedback>\nThe files already contain your previous attempt. A reviewer asked for these changes; "
+        f"fix exactly these and keep the rest:\n{issues}\n</review_feedback>"
     )
 
 
@@ -168,8 +184,9 @@ def build_coder_graph(
     def commit(state: CoderState) -> dict:
         ticket = state["ticket"]
         summary = _final_text(state["messages"]) or state["plan"]["understanding"]
-        stat = workspace.diff_stat()
-        sha = workspace.commit(f"{ticket['summary']}\n\n{summary}\n\nTicket #{ticket['id']}")
+        title = f"Address review comments: {ticket['summary']}" if ticket.get("feedback") else ticket["summary"]
+        sha = workspace.commit(f"{title}\n\n{summary}\n\nTicket #{ticket['id']}")
+        stat = workspace.branch_stat()  # the whole branch, across revisions
         return {
             "outcome": {
                 "status": "done",

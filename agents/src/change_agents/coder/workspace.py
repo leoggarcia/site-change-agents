@@ -71,6 +71,21 @@ class Workspace:
         _git(root, "checkout", "--quiet", "-b", branch)
         return cls(root, branch)
 
+    @classmethod
+    def reopen(cls, site_id: str, name: str, branch: str, commit: str) -> "Workspace":
+        """The workspace of an earlier coding run, reset to `commit` (e.g. to review it or to revise it).
+
+        Until Phase 7 pushes branches to GitHub, the branch only lives in this workspace.
+        """
+        root = get_settings().workspaces_dir / name
+        if not (root / ".git").exists():
+            raise WorkspaceError(f"The workspace {name} no longer exists, so its branch is gone.")
+        workspace = cls(root, branch)
+        _git(root, "checkout", "--quiet", "--force", branch)
+        _git(root, "reset", "--quiet", "--hard", commit)
+        _git(root, "clean", "--quiet", "-fd")
+        return workspace
+
     def install(self) -> None:
         # The npm cache is shared between workspaces, so after the first ticket this is mostly offline.
         env = {**os.environ, "npm_config_cache": str(get_settings().npm_cache_dir)}
@@ -105,6 +120,27 @@ class Workspace:
     def diff(self) -> str:
         _git(self.root, "add", "--all", "--intent-to-add")
         return _git(self.root, "diff")
+
+    def branch_diff(self) -> str:
+        """Everything this branch changed compared with main, across all its commits."""
+        return _git(self.root, "diff", "origin/main...HEAD")
+
+    def branch_files(self) -> list[tuple[str, str]]:
+        """(status, path) for each file the branch changed: A added, M modified, D deleted, R renamed."""
+        files = []
+        for line in _git(self.root, "diff", "--name-status", "origin/main...HEAD").splitlines():
+            status, *paths = line.split("\t")
+            files.append((status[0], paths[-1]))
+        return files
+
+    def branch_stat(self) -> DiffStat:
+        files, insertions, deletions = [], 0, 0
+        for line in _git(self.root, "diff", "--numstat", "origin/main...HEAD").splitlines():
+            added, removed, path = line.split("\t", 2)
+            files.append(path)
+            insertions += int(added) if added.isdigit() else 0
+            deletions += int(removed) if removed.isdigit() else 0
+        return DiffStat(files, insertions, deletions)
 
     def commit(self, message: str) -> str:
         name, email = AGENT_AUTHOR

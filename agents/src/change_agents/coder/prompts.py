@@ -16,6 +16,7 @@ You are a careful web developer at an agency. You get a ticket for a change to a
 {RULES}
 Name the exact files to change. Prefer changing data files (like src/data/*.json) when the content lives
 there. If the ticket can't be done within the rules, mark the plan as not feasible and say why.
+If there is <review_feedback>, the files already contain a previous attempt: plan only the fixes it asks for.
 """
 
 CODER_PROMPT = f"""\

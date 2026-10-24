@@ -64,7 +64,16 @@ export interface TicketEvent {
   reasoning: string | null
   /** Technical error behind a failure or retry; only sent to the agency. */
   error: string | null
+  /** The automatic checks and the reviewer's findings, on review events; only sent to the agency. */
+  review: ReviewDetails | null
   createdAt: string
+}
+
+export interface ReviewDetails {
+  decidedBy: 'checks' | 'reviewer'
+  checks: { name: string; passed: boolean; level: 'blocking' | 'warning'; details: string; findings: string[] }[]
+  issues: { severity: 'blocker' | 'major' | 'minor'; file: string | null; problem: string; fix: string }[]
+  criteria: { criterion: string; met: boolean; evidence: string }[]
 }
 
 export interface TicketDetail extends Ticket {

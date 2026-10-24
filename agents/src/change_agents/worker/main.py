@@ -15,7 +15,7 @@ from change_agents.intake.context import load_context
 from change_agents.intake.graph import build_intake_graph
 from change_agents.intake.runner import IntakeRunner
 from change_agents.llm import chat_model
-from change_agents.worker.handlers import make_coding_handler, make_intake_handler, reindex, stub_review
+from change_agents.worker.handlers import make_coding_handler, make_intake_handler, make_review_handler, reindex
 from change_agents.worker.processor import make_processor
 from change_agents.worker.watchdog import watch
 
@@ -27,7 +27,7 @@ RESULTS_QUEUE = "agent-results"
 STAGES = {
     "intake": (None, 2, 180),
     "coding": (None, 2, 900),
-    "review": (stub_review, 2, 300),
+    "review": (None, 2, 300),
     "reindex": (reindex, 1, 900),
 }
 
@@ -51,6 +51,7 @@ async def run() -> None:
         handlers = {
             "intake": make_intake_handler(IntakeRunner(intake_graph)),
             "coding": make_coding_handler(chat_model(settings.coder_model)),
+            "review": make_review_handler(chat_model(settings.reviewer_model)),
         }
 
         workers = []

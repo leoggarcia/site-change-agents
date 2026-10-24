@@ -40,9 +40,6 @@ class Settings(BaseSettings):
         "google_genai:gemini-3.8-flash": 4,
     }
 
-    # Share of stub review jobs that fail on purpose (0 to 1), to see retries working. Until Phase 6.
-    stub_failure_rate: float = 0.0
-
     # Folder with one checkout per site, named by site id (e.g. test-sites/luna-cafe).
     sites_repos_dir: Path = PROJECT_ROOT / "test-sites"
 

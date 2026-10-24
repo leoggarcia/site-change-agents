@@ -1,3 +1,4 @@
+import type { ReviewResult } from '../agents/agent-results.js';
 import type { TicketEvent } from './ticket-event.entity.js';
 import type { TicketStatus } from './ticket-status.js';
 import type { Ticket } from './ticket.entity.js';
@@ -39,6 +40,8 @@ export interface TicketEventView {
   reasoning: string | null;
   /** Technical error behind a failure or retry. Only shown to the agency. */
   error: string | null;
+  /** The checks and the Reviewer Agent's findings, on review events. Only shown to the agency. */
+  review: Pick<ReviewResult, 'decidedBy' | 'checks' | 'issues' | 'criteria'> | null;
   createdAt: Date;
 }
 
@@ -90,6 +93,12 @@ export function toTicketEventView(event: TicketEvent, forAgency: boolean): Ticke
     sources: Array.isArray(event.data?.sources) ? (event.data.sources as string[]) : [],
     reasoning: forAgency && typeof event.data?.reasoning === 'string' ? event.data.reasoning : null,
     error: forAgency && typeof event.data?.error === 'string' ? event.data.error : null,
+    review:
+      forAgency && Array.isArray(event.data?.checks)
+        ? (({ decidedBy, checks, issues, criteria }) => ({ decidedBy, checks, issues, criteria }))(
+            event.data as unknown as ReviewResult,
+          )
+        : null,
     createdAt: event.createdAt,
   };
 }
