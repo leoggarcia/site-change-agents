@@ -1,0 +1,26 @@
+{"site": "luna-cafe", "query": "the part where customers say nice things about us", "expected": ["src/components/Reviews.astro"]}
+{"site": "luna-cafe", "query": "where are the opening hours shown", "expected": ["src/data/business.json", "src/components/Hours.astro"]}
+{"site": "luna-cafe", "query": "change the price of the cappuccino", "expected": ["src/pages/menu.astro"]}
+{"site": "luna-cafe", "query": "the weekly favorites on the home page", "expected": ["src/components/Specials.astro"]}
+{"site": "luna-cafe", "query": "the big welcome text at the top of the home page", "expected": ["src/components/Hero.astro"]}
+{"site": "luna-cafe", "query": "our phone number", "expected": ["src/data/business.json"]}
+{"site": "luna-cafe", "query": "the brown color used for titles", "expected": ["src/styles/global.css"]}
+{"site": "luna-cafe", "query": "links at the very bottom of the page", "expected": ["src/components/Footer.astro"]}
+{"site": "luna-cafe", "query": "Cold Brew", "expected": ["src/pages/menu.astro"]}
+{"site": "luna-cafe", "query": "the menu links at the top", "expected": ["src/components/Header.astro"]}
+{"site": "brightsmile-dental", "query": "what patients say about the clinic", "expected": ["src/components/PatientStories.astro"]}
+{"site": "brightsmile-dental", "query": "list of treatments we offer", "expected": ["src/components/Services.astro"]}
+{"site": "brightsmile-dental", "query": "the after-hours emergency number", "expected": ["src/data/business.json", "src/components/BookingBanner.astro"]}
+{"site": "brightsmile-dental", "query": "Dr. Samuel Ortiz biography", "expected": ["src/pages/team.astro"]}
+{"site": "brightsmile-dental", "query": "the button to schedule an appointment at the end of the home page", "expected": ["src/components/BookingBanner.astro"]}
+{"site": "brightsmile-dental", "query": "the mint green color", "expected": ["src/styles/global.css"]}
+{"site": "brightsmile-dental", "query": "office hours shown in the footer", "expected": ["src/components/Footer.astro", "src/data/business.json"]}
+{"site": "brightsmile-dental", "query": "whitening", "expected": ["src/components/Services.astro"]}
+{"site": "northside-accounting", "query": "how much the plans cost", "expected": ["src/data/plans.json", "src/components/Pricing.astro"]}
+{"site": "northside-accounting", "query": "common questions clients ask", "expected": ["src/data/faq.json", "src/components/Faq.astro"]}
+{"site": "northside-accounting", "query": "the services we provide like payroll and bookkeeping", "expected": ["src/components/WhatWeDo.astro"]}
+{"site": "northside-accounting", "query": "company history and founder", "expected": ["src/pages/about.astro"]}
+{"site": "northside-accounting", "query": "QuickBooks", "expected": ["src/data/faq.json"]}
+{"site": "northside-accounting", "query": "the highlighted plan with the gold border", "expected": ["src/components/Pricing.astro", "src/data/plans.json"]}
+{"site": "northside-accounting", "query": "our LinkedIn link", "expected": ["src/data/business.json", "src/components/Footer.astro"]}
+{"site": "northside-accounting", "query": "the consultation button at the top of the home page", "expected": ["src/components/Hero.astro"]}

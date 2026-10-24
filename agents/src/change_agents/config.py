@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     # Changing the embedding model or its dimension means re-indexing every site.
     embedding_model: str = "google_genai:gemini-embedding-001"
     embedding_dimensions: int = 1536
+    # Gemini's free tier counts every text in a batch as one request (100 per minute).
+    embedding_texts_per_minute: int = 90
 
     # Free tiers allow few requests per minute; every model call waits for its turn.
     llm_requests_per_minute: int = 8
@@ -32,7 +34,10 @@ class Settings(BaseSettings):
     # Folder with one checkout per site, named by site id (e.g. test-sites/luna-cafe).
     sites_repos_dir: Path = PROJECT_ROOT / "test-sites"
 
-    @field_validator("sites_repos_dir")
+    # Client knowledge for RAG: brand guides, plans and past tickets, one folder per site id.
+    knowledge_dir: Path = PROJECT_ROOT / "knowledge"
+
+    @field_validator("sites_repos_dir", "knowledge_dir")
     @classmethod
     def _relative_to_project_root(cls, path: Path) -> Path:
         return path if path.is_absolute() else (PROJECT_ROOT / path).resolve()

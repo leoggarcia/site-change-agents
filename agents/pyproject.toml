@@ -18,6 +18,9 @@ dependencies = [
 
 [project.scripts]
 index-site = "change_agents.indexer.cli:main"
+rag-index = "change_agents.rag.cli:index_main"
+rag-search = "change_agents.rag.cli:search_main"
+rag-eval = "change_agents.rag.evaluate:main"
 
 [dependency-groups]
 dev = [

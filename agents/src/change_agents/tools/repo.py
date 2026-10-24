@@ -40,7 +40,8 @@ class RepoSandbox:
             raise SandboxError(f"'{relative_path}' may contain secrets and cannot be read.")
         return candidate
 
-    def list_files(self, directory: str = "") -> list[str]:
+    def iter_files(self, directory: str = "") -> list[str]:
+        """Relative paths of every readable file, skipping ignored folders and secrets."""
         start = self.resolve(directory)
         if not start.is_dir():
             raise SandboxError(f"'{directory}' is not a folder.")
@@ -48,12 +49,11 @@ class RepoSandbox:
         files: list[str] = []
         for current, dirs, names in os.walk(start):
             dirs[:] = sorted(d for d in dirs if d not in IGNORED_DIRS and not _is_secret(d))
-            for name in sorted(names):
-                if _is_secret(name):
-                    continue
-                path = Path(current) / name
-                files.append(f"{path.relative_to(self.root).as_posix()} ({path.stat().st_size} bytes)")
+            files += [(Path(current) / name).relative_to(self.root).as_posix() for name in sorted(names) if not _is_secret(name)]
         return files
+
+    def list_files(self, directory: str = "") -> list[str]:
+        return [f"{path} ({(self.root / path).stat().st_size} bytes)" for path in self.iter_files(directory)]
 
     def read_file(self, path: str) -> str:
         target = self.resolve(path)
