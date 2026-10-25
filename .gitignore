@@ -3,3 +3,6 @@ data/
 test-sites/
 node_modules/
 .DS_Store
+
+# Personal planning notes (in Spanish), kept out of the repository
+proyecto-agente-cambios-web.md

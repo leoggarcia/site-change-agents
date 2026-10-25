@@ -1,6 +1,6 @@
 # Site Change Agents
 
-The full project plan is in `proyecto-agente-cambios-web.md` (written in Spanish). Follow its phases in order. Its "Plan changes" block at the top replaces the original stack choices:
+The full project plan is in `proyecto-agente-cambios-web.md` (written in Spanish, kept locally and out of git). Follow its phases in order. Its "Plan changes" block at the top replaces the original stack choices:
 
 - Everything runs in Docker on the developer's own VPS: the system and the test sites (served by Caddy, with one preview per PR). No Netlify, Vercel or GitHub Pages.
 - LLM and embedding providers are swappable through config. Gemini's free tier is the default for development. Never hard-code a provider SDK in agent logic. Every model comes from a `provider:model` setting.

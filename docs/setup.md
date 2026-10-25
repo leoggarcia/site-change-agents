@@ -1,52 +1,82 @@
-# Setup: the manual steps
+# Setup: running it on a server
 
-These are the parts of Phase 0 that need your accounts. Everything else is in the repo.
+Locally, `docker compose up -d --build` is enough (see the README). This guide covers what needs your own
+accounts: GitHub for pull requests and previews, a server, and optionally Cloudflare and Langfuse.
 
-## 1. GitHub organization and test-site repos
+## 1. GitHub: the site repositories
 
-1. Create a free GitHub organization (e.g. `yourname-sites`).
-2. Create one repo per test site, **named exactly like the folder**. The repo name is the site ID used in the URLs:
-   `luna-cafe`, `brightsmile-dental`, `northside-accounting`.
-3. Push each folder from `test-sites/` to its repo (each folder is its own repo; `test-sites/` is ignored by this one).
+1. Create a GitHub organization (the free plan is enough), e.g. `leo-sites`.
+2. Create one **public** repository per site, named like its folder: `luna-cafe`, `brightsmile-dental`,
+   `northside-accounting`. Public, because on the free plan GitHub environments (which show the preview
+   link on each pull request) only work in public repositories.
+3. Push each site. Each has `.github/workflows/deploy.yml`, which builds every pull request and every
+   push to `main` and uploads the result as the `site` artifact. Nothing reaches into your server.
+4. In each repository (or the organization), set the Actions **variable** `SITES_BASE_URL` to where the
+   sites are served, e.g. `https://sites.example.com`.
 
-## 2. VPS
+## 2. GitHub: the token for the agents
 
-1. Install Docker on the VPS and copy this repo there.
-2. Create the folder the sites are copied into: `sudo mkdir -p /srv/sites && sudo chown deploy:deploy /srv/sites`.
-3. Create a `deploy` user for GitHub Actions. It needs SSH access and `rsync`, and nothing else.
-4. Copy `.env.example` to `.env` and set:
-   - `APP_ADDRESS` / `SITES_ADDRESS`: hostnames pointing at the VPS. Without a domain, use sslip.io:
-     `app.<VPS-IP>.sslip.io` and `sites.<VPS-IP>.sslip.io` (no `http://`, so Caddy gets HTTPS certificates).
-   - `SITES_DIR=/srv/sites`
-   - A strong `POSTGRES_PASSWORD`.
-5. `docker compose up -d --build`
+Create a **fine-grained personal access token** for the organization with access to **only the site
+repositories**, and these permissions:
 
-## 3. Secrets and variables for the deploy workflow
-
-Set these at the organization level if your plan allows it, or else in each repo (Settings → Secrets and variables → Actions):
-
-| Kind | Name | Value |
+| Permission | Access | Why |
 |---|---|---|
-| Secret | `VPS_HOST` | VPS IP or hostname |
-| Secret | `VPS_USER` | `deploy` |
-| Secret | `VPS_SSH_KEY` | Private key of a new key pair made only for this (`ssh-keygen -t ed25519`); add the public key to `~deploy/.ssh/authorized_keys` |
-| Secret | `VPS_KNOWN_HOSTS` | Output of `ssh-keyscan <VPS_HOST>` |
-| Variable | `SITES_BASE_URL` | `https://sites.<VPS-IP>.sslip.io` |
-| Variable | `VPS_SITES_DIR` | `/srv/sites` (optional, this is the default) |
+| Contents | Read and write | Clone the sites, push `agent/ticket-N` branches, merge |
+| Pull requests | Read and write | Open and update pull requests |
+| Actions | Read | Wait for the deploy workflow and download its build |
+| Metadata | Read | Required by GitHub |
 
-`DEPLOY_WEBHOOK_URL` and `DEPLOY_WEBHOOK_SECRET` come in Phase 7.
+In `.env`: `GITHUB_ORG=<organization>` and `GITHUB_TOKEN=<token>`.
 
-## 4. GitHub token for the agents
+## 3. The server
 
-Create a **fine-grained personal access token** with access to **only the three test-site repos**.
-Permissions: Contents (read and write), Pull requests (read and write), Metadata (read).
-Put it in `.env` as `GITHUB_TOKEN`, and the org name as `GITHUB_ORG`.
+Any machine with Docker works, also one behind NAT: deploys are pulled, not pushed.
 
-## 5. Gemini API key
+1. Copy the repository (or `git clone` it) and create `.env` from `.env.example` with your keys, a strong
+   `POSTGRES_PASSWORD`, `SITES_BASE_URL`, and `PUBLIC_APP_URL` (the panel's public URL, for links in
+   pull requests).
+2. **If the server has free ports 80 and 443**, set `APP_ADDRESS` and `SITES_ADDRESS` to your two
+   hostnames (no `http://`) and run `docker compose up -d --build`. Caddy gets HTTPS certificates.
+3. **If ports 80/443 are taken or you use a tunnel**, set `APP_ADDRESS=http://:80` and
+   `SITES_ADDRESS=http://:8081`, and run:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --build
+   ```
+   Caddy then listens on `127.0.0.1:3020` (panel and API) and `127.0.0.1:3021` (sites), and Postgres and
+   Redis are not published on the host.
+4. Seed, index and put the sites online once:
+   ```bash
+   docker compose exec api node dist/database/seed.js
+   docker compose exec agents-worker index-site luna-cafe        # and the other sites
+   docker compose exec agents-worker rag-index
+   docker compose exec agents-worker rag-index --knowledge
+   docker compose exec agents-worker publish-site luna-cafe brightsmile-dental northside-accounting
+   ```
 
-Create a key in Google AI Studio and put it in `.env` as `GOOGLE_API_KEY`.
-Check which Flash model IDs your key can use there, and update the `*_MODEL` lines if needed.
+To update the server later: copy the code again and rebuild (`docker compose build` and `up -d`).
 
-## Phase 0 is done when
+## 4. Cloudflare Tunnel and Access (when the server is behind a tunnel)
 
-You open a PR on one of the sites, the Action posts a preview URL (shown as "View deployment" on the PR), and merging the PR updates the production URL.
+1. In **Zero Trust → Networks → Tunnels →** your tunnel **→ Public hostnames**, add:
+   - `agents.example.com` → `HTTP` · `localhost:3020`
+   - `sites.example.com` → `HTTP` · `localhost:3021`
+2. In **Zero Trust → Access → Applications**, add a **self-hosted** application for `agents.example.com`
+   with a policy that allows only your email. The demo sign-in has no passwords, so the panel must not be
+   public. Leave `sites.example.com` open: clients open their previews there.
+
+## 5. Model keys and limits
+
+`GOOGLE_API_KEY` from Google AI Studio. On the free tier each model has its own daily quota (Flash Lite:
+500 requests per day, 15 per minute), so the defaults put the reviewer on a different model than the coder.
+Any model can be changed with the `*_MODEL` settings (`provider:model`).
+
+## 6. Langfuse (optional)
+
+Create a project at [cloud.langfuse.com](https://cloud.langfuse.com) (the Hobby plan needs no card), and
+set `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and `LANGFUSE_HOST` (`https://us.cloud.langfuse.com` for
+the US region). On the server, also set `LANGFUSE_TRACING_ENVIRONMENT=production`. Without keys nothing is
+traced.
+
+## 7. Bull Board (optional)
+
+Set `BULL_BOARD_PASSWORD` to see the queues at `/api/queues` (user `agency`).
