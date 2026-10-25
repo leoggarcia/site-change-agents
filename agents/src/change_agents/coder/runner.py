@@ -46,7 +46,11 @@ def make_locator(site_id: str, sandbox: RepoSandbox, first: list[str] | None = N
 
 
 def run_coder(
-    ticket: dict[str, Any], model: BaseChatModel, on_update: OnUpdate | None = None, revise_commit: str | None = None
+    ticket: dict[str, Any],
+    model: BaseChatModel,
+    on_update: OnUpdate | None = None,
+    revise_commit: str | None = None,
+    callbacks: list | None = None,
 ) -> dict[str, Any]:
     """`ticket` has id, site_id, summary, details, change_type, target and acceptance_criteria.
 
@@ -79,7 +83,8 @@ def run_coder(
 
     final: dict[str, Any] = {}
     # Each edit-loop turn is two graph steps (edit + tools); leave room for the turn limit to apply first.
-    for update in graph.stream(initial_state(ticket), {"recursion_limit": 60}, stream_mode="updates"):
+    config = {"recursion_limit": 60, "callbacks": callbacks or []}
+    for update in graph.stream(initial_state(ticket), config, stream_mode="updates"):
         for node, output in update.items():
             final.update(output or {})
             if on_update:

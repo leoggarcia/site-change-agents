@@ -96,7 +96,7 @@ export type AgentReport = {
 // Job data the API sends to each queue.
 export type IntakeJob =
   | { ticketId: number; threadId: string; action: 'start'; siteId: string; request: string }
-  | { ticketId: number; threadId: string; action: 'answer'; answer: string; questionNumber: number };
+  | { ticketId: number; threadId: string; action: 'answer'; siteId: string; answer: string; questionNumber: number };
 
 /** The structured ticket the Coder Agent works from. */
 export interface CodingJob {

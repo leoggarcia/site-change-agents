@@ -62,6 +62,18 @@ class Settings(BaseSettings):
     # <sites_dir>/<site id>/ for production and <sites_dir>/previews/<site id>/pr-<n>/ for previews.
     sites_dir: Path = PROJECT_ROOT / "data" / "sites"
 
+    # Langfuse tracing (Phase 9). Without keys, nothing is traced.
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_base_url: str = ""
+    langfuse_host: str = ""  # the older name of langfuse_base_url
+    # Separates traces in Langfuse, e.g. "development" on a laptop and "production" on the server.
+    langfuse_tracing_environment: str = "development"
+
+    @property
+    def tracing_enabled(self) -> bool:
+        return bool(self.langfuse_public_key and self.langfuse_secret_key)
+
     @property
     def github_enabled(self) -> bool:
         return bool(self.github_org and self.github_token)

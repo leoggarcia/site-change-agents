@@ -1097,3 +1097,123 @@ button.primary {
   color: var(--accent-text);
   font-weight: 600;
 }
+
+/* Metrics */
+
+.metrics h1 {
+  margin-bottom: 0.25rem;
+}
+
+.metrics .card {
+  margin: 0;
+}
+
+.metrics > * + * {
+  margin-top: 1.25rem;
+}
+
+.hero-metric {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.hero-value {
+  font-size: 3.25rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 1rem;
+}
+
+.stat-tile {
+  display: grid;
+  align-content: start;
+  gap: 0.2rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+
+.stat-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.stat-value {
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+
+.stat-note {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1.25rem;
+}
+
+.metrics-grid h2,
+.metrics > .card > h2 {
+  margin-top: 0;
+  font-size: 1rem;
+}
+
+.status-bars {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.status-bars li {
+  display: grid;
+  grid-template-columns: 9rem 1fr 2rem;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+/* One series: one hue, on a lighter step of the same ramp. */
+.status-track {
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--info-bg);
+  overflow: hidden;
+}
+
+.status-fill {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.status-count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.table-wrap.flat {
+  border: 0;
+}
+
+td.num,
+th.num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.block {
+  display: block;
+}

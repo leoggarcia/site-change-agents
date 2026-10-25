@@ -20,13 +20,17 @@ def fetch_knowledge(site_id: str, query: str) -> str:
 
 
 def run_reviewer(
-    ticket: dict[str, Any], workspace: Workspace, model: BaseChatModel, on_update: OnUpdate | None = None
+    ticket: dict[str, Any],
+    workspace: Workspace,
+    model: BaseChatModel,
+    on_update: OnUpdate | None = None,
+    callbacks: list | None = None,
 ) -> dict[str, Any]:
     """`ticket` has site_id, summary, details, acceptance_criteria and the client's original request."""
     started = time.monotonic()
     graph = build_reviewer_graph(model, workspace, fetch_knowledge)
     final: dict[str, Any] = {}
-    for update in graph.stream(initial_state(ticket), stream_mode="updates"):
+    for update in graph.stream(initial_state(ticket), {"callbacks": callbacks or []}, stream_mode="updates"):
         for node, output in update.items():
             final.update(output or {})
             if on_update:

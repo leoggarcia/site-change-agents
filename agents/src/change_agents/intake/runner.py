@@ -27,16 +27,18 @@ class IntakeRunner:
         self.graph = graph
         self.on_update = on_update
 
-    def start(self, thread_id: str, site_id: str, request: str) -> dict[str, Any]:
+    def start(self, thread_id: str, site_id: str, request: str, callbacks: list | None = None) -> dict[str, Any]:
         snapshot = self.graph.get_state(_config(thread_id))
         if not snapshot.values:
-            self._run(initial_state(site_id, request), thread_id)
+            self._run(initial_state(site_id, request), thread_id, callbacks)
         elif snapshot.next and not snapshot.interrupts:
             # A previous attempt crashed mid-way: input None means "continue from the last checkpoint".
-            self._run(None, thread_id)
+            self._run(None, thread_id, callbacks)
         return self.result(thread_id)
 
-    def resume(self, thread_id: str, answer: str, question_number: int | None = None) -> dict[str, Any]:
+    def resume(
+        self, thread_id: str, answer: str, question_number: int | None = None, callbacks: list | None = None
+    ) -> dict[str, Any]:
         snapshot = self.graph.get_state(_config(thread_id))
         if snapshot.interrupts:
             pending = snapshot.interrupts[0].value["number"]
@@ -44,9 +46,9 @@ class IntakeRunner:
                 # This answer was already used and the graph has asked something else since.
                 return self.result(thread_id)
             # Command(resume=...) becomes the return value of the interrupt() call that paused the graph.
-            self._run(Command(resume=answer), thread_id)
+            self._run(Command(resume=answer), thread_id, callbacks)
         elif snapshot.next:
-            self._run(None, thread_id)  # the answer was taken in by an attempt that crashed afterwards
+            self._run(None, thread_id, callbacks)  # the answer was taken in by an attempt that crashed afterwards
         elif not snapshot.values:
             raise NotWaitingForAnswer(f"Thread {thread_id} is not waiting for an answer.")
         return self.result(thread_id)
@@ -62,8 +64,9 @@ class IntakeRunner:
             return {"status": "question", **snapshot.interrupts[0].value, **shared}
         return {**values["outcome"], **shared}
 
-    def _run(self, graph_input: Any, thread_id: str) -> None:
-        for update in self.graph.stream(graph_input, _config(thread_id), stream_mode="updates"):
+    def _run(self, graph_input: Any, thread_id: str, callbacks: list | None = None) -> None:
+        config = {**_config(thread_id), "callbacks": callbacks or []}
+        for update in self.graph.stream(graph_input, config, stream_mode="updates"):
             for node, output in update.items():
                 if self.on_update and node != "__interrupt__":
                     self.on_update(node, output or {})

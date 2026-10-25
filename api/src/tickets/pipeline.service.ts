@@ -93,10 +93,10 @@ export class PipelineService implements OnApplicationBootstrap {
 
   async answer(user: User, ticketId: number, answer: string): Promise<void> {
     const { questionNumber } = await this.tickets.recordAnswer(user, ticketId, answer);
-    await this.addAnswerJob(ticketId, answer, questionNumber);
+    await this.addAnswerJob(ticketId, (await this.tickets.findById(ticketId)).siteId, answer, questionNumber);
   }
 
-  private async addAnswerJob(ticketId: number, answer: string, questionNumber: number): Promise<void> {
+  private async addAnswerJob(ticketId: number, siteId: string, answer: string, questionNumber: number): Promise<void> {
     const run = await this.tickets.countEntries(ticketId, 'intake');
     await this.intakeQueue.add(
       'answer',
@@ -104,6 +104,7 @@ export class PipelineService implements OnApplicationBootstrap {
         ticketId,
         threadId: intakeThread(ticketId, run),
         action: 'answer',
+        siteId,
         answer,
         questionNumber,
       },
@@ -537,7 +538,7 @@ export class PipelineService implements OnApplicationBootstrap {
           await this.addMergeJob(ticket);
       } else if (!ticket.pendingQuestion) {
         const answer = await this.tickets.unprocessedAnswer(ticket.id);
-        if (answer) await this.addAnswerJob(ticket.id, answer.answer, answer.number);
+        if (answer) await this.addAnswerJob(ticket.id, ticket.siteId, answer.answer, answer.number);
         else await this.startIntake(ticket);
       }
     }

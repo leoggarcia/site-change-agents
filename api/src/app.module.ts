@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { dataSourceOptions } from './database/data-source.js';
+import { MetricsModule } from './metrics/metrics.module.js';
 import { SitesModule } from './sites/sites.module.js';
 import { TicketsModule } from './tickets/tickets.module.js';
 import { UsersModule } from './users/users.module.js';
@@ -17,6 +18,7 @@ import { UsersModule } from './users/users.module.js';
     UsersModule,
     SitesModule,
     TicketsModule,
+    MetricsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

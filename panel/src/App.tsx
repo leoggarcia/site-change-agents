@@ -7,6 +7,7 @@ import { SignInPage } from './pages/SignInPage'
 import { SitePage } from './pages/SitePage'
 import { SitesPage } from './pages/SitesPage'
 import { TicketPage } from './pages/TicketPage'
+import { MetricsPage } from './pages/MetricsPage'
 
 function AppRoutes() {
   const { user, ready } = useAuth()
@@ -20,6 +21,7 @@ function AppRoutes() {
       <Route path="/tickets/:id" element={<TicketPage />} />
       {user.role === 'agency' && <Route path="/sites" element={<SitesPage />} />}
       {user.role === 'agency' && <Route path="/sites/:id" element={<SitePage />} />}
+      {user.role === 'agency' && <Route path="/metrics" element={<MetricsPage />} />}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

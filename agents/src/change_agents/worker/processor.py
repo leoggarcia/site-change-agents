@@ -16,6 +16,7 @@ from typing import Any
 
 from bullmq.custom_errors import UnrecoverableError
 
+from change_agents import tracing
 from change_agents.llm import is_daily_quota_error
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ def make_processor(stage: str, handler: Handler, timeout_seconds: float, report:
             # The thread keeps running after a timeout (Python can't kill threads); its result is ignored.
             result = await asyncio.wait_for(asyncio.to_thread(handler, job.data), timeout_seconds)
         except Exception as error:
+            await asyncio.to_thread(tracing.flush)
             if isinstance(error, TimeoutError):
                 error = StageTimeout(f"no result after {timeout_seconds:g} seconds")
             elif is_daily_quota_error(error):
@@ -54,6 +56,7 @@ def make_processor(stage: str, handler: Handler, timeout_seconds: float, report:
             )
             raise error
 
+        await asyncio.to_thread(tracing.flush)  # send this job's trace now, not whenever the batch fills
         await report(f"{stage}-{job.id}-result", {**base, "result": result})
         return result
 

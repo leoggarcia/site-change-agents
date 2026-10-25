@@ -113,3 +113,33 @@ export interface ProjectSummaryRecord {
   stats: { input_tokens?: number; output_tokens?: number; model_calls?: number; turns?: number; duration_seconds?: number }
   createdAt: string
 }
+
+// Business metrics (api/src/metrics/metrics.service.ts).
+export interface Metrics {
+  statusCounts: Record<TicketStatus, number>
+  live: {
+    count: number
+    medianLeadMinutes: number | null
+    avgAgentMinutes: number | null
+    avgClientWaitMinutes: number | null
+    avgPublishMinutes: number | null
+    automatedShare: number | null
+    avgCostUsd: number | null
+    avgTokens: { input: number; output: number } | null
+  }
+  handoffs: { outOfScope: number; byAgents: number; failed: number }
+  recent: {
+    id: number
+    siteName: string
+    summary: string
+    leadMinutes: number
+    agentMinutes: number
+    clientWaitMinutes: number
+    publishMinutes: number
+    automated: boolean
+    tokens: { input: number; output: number }
+    costUsd: number | null
+  }[]
+  baseline: { hours: number; label: string }
+  prices: { models: Record<'intake' | 'coder' | 'reviewer', string>; source: string }
+}

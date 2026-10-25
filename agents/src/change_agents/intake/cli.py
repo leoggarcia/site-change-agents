@@ -10,6 +10,7 @@ import sys
 import uuid
 from typing import Any
 
+from change_agents import tracing
 from change_agents.checkpoints import postgres_checkpointer
 from change_agents.config import get_settings
 from change_agents.indexer.store import site_exists
@@ -48,11 +49,17 @@ def main() -> None:
         with postgres_checkpointer() as checkpointer:
             graph = build_intake_graph(chat_model(settings.intake_model), load_context, checkpointer)
             runner = IntakeRunner(graph, on_update=_print_update)
-            result = runner.start(thread_id, args.site_id, args.request)
+            # Each turn is one trace; the whole conversation is one Langfuse session (named after the thread).
+            with tracing.trace("intake", thread_id, args.site_id, input=args.request) as trace:
+                result = runner.start(thread_id, args.site_id, args.request, trace.callbacks)
+                trace.output(result)
             while result["status"] == "question":
                 print(f"\nAgent (question {result['number']} of {result['max']}): {result['question']}")
                 print(f"           [graph paused; its state is saved in Postgres under thread {thread_id}]")
-                result = runner.resume(thread_id, input("You: "))
+                answer = input("You: ")
+                with tracing.trace("intake", thread_id, args.site_id, input=answer) as trace:
+                    result = runner.resume(thread_id, answer, callbacks=trace.callbacks)
+                    trace.output(result)
     except (KeyboardInterrupt, EOFError):
         sys.exit(f"\nStopped. The paused conversation stays saved as thread {thread_id}.")
     except Exception as error:  # provider errors (quota, billing, bad key) are long; show the useful part
@@ -63,3 +70,6 @@ def main() -> None:
         if result.get(key):
             print(f"{key}: {json.dumps(result[key], indent=2, ensure_ascii=False)}")
     print(f"usage: {result['usage']}")
+    tracing.flush()
+    if get_settings().tracing_enabled:
+        print(f"Trace: Langfuse → Sessions → ticket-{thread_id}")

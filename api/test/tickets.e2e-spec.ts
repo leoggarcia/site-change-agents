@@ -335,7 +335,7 @@ describe('Tickets (e2e)', () => {
         expect(ticket.status).toBe('awaiting_approval');
         return ticket;
       });
-      expect(workers.intakeJobs.at(-1)).toMatchObject({ action: 'answer', answer: '618 765 4321', questionNumber: 1 });
+      expect(workers.intakeJobs.at(-1)).toMatchObject({ action: 'answer', siteId: 'luna-cafe', answer: '618 765 4321', questionNumber: 1 });
       expect(done).toMatchObject({
         summary: 'Update the phone number in the footer',
         changeType: 'content_update',
@@ -577,6 +577,23 @@ describe('Tickets (e2e)', () => {
         delete process.env.GITHUB_ORG;
         delete process.env.GITHUB_TOKEN;
       }
+    });
+  });
+
+  describe('metrics', () => {
+    it('measures the live tickets for the agency only', async () => {
+      await request(app.getHttpServer()).get('/api/metrics').set(as(sofia)).expect(403);
+      const { body } = await request(app.getHttpServer()).get('/api/metrics').set(as(agency)).expect(200);
+
+      expect(body.statusCounts.deployed).toBeGreaterThanOrEqual(2); // published earlier in this suite
+      expect(body.live.count).toBe(body.statusCounts.deployed);
+      for (const ticket of body.recent) {
+        // The parts add up to the whole: agents + waiting for the client + publishing = request to live.
+        const parts = ticket.agentMinutes + ticket.clientWaitMinutes + ticket.publishMinutes;
+        expect(Math.abs(parts - ticket.leadMinutes)).toBeLessThan(0.2);
+      }
+      expect(body.baseline.hours).toBe(24);
+      expect(body.prices.models.reviewer).toBe('gemini-3.1-flash-lite');
     });
   });
 });
