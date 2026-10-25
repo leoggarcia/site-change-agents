@@ -1,4 +1,4 @@
-import type { Metrics, ProjectSummaryRecord, Site, Ticket, TicketDetail, TicketStatus, User } from './types'
+import type { Board, Metrics, ProjectSummaryRecord, Site, Ticket, TicketDetail, TicketStatus, TicketTrace, User } from './types'
 
 const DEMO_USER_KEY = 'demoUserId'
 
@@ -55,6 +55,8 @@ export const api = {
   sites: () => request<Site[]>('/sites'),
   siteSummary: (siteId: string) => request<ProjectSummaryRecord>(`/sites/${siteId}/summary`),
   metrics: () => request<Metrics>('/metrics'),
+  board: () => request<Board>('/board'),
+  ticketTrace: (id: number) => request<TicketTrace>(`/tickets/${id}/trace`),
   reindex: (siteId: string) => request<{ queued: true }>(`/sites/${siteId}/reindex`, { method: 'POST' }),
   tickets: () => request<Ticket[]>('/tickets'),
   ticket: (id: number) => request<TicketDetail>(`/tickets/${id}`),

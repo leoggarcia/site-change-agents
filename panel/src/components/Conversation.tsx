@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent, KeyboardEvent, ReactNode } from 'react'
 import { api } from '../api'
+import { initials } from '../people'
 import { STATUS_INFO } from '../statuses'
 import type { ReviewDetails, TicketDetail, TicketEvent, TicketStatus } from '../types'
 import { Icon } from './Icon'
@@ -43,15 +44,6 @@ type Item =
 
 const timeFormat = new Intl.DateTimeFormat('en-US', { timeStyle: 'short' })
 const dayFormat = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' })
-
-function initials(name: string): string {
-  return name
-    .replace(/^(dr|mr|mrs|ms)\.?\s+/i, '')
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase() ?? '')
-    .join('')
-}
 
 function Avatar({ event }: { event: TicketEvent }) {
   const agent = event.actor.agent ? AGENTS[event.actor.agent] : undefined

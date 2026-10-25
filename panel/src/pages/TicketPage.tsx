@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { Link, useParams } from 'react-router'
 import { api } from '../api'
 import { useAuth } from '../auth'
+import { AgentTrace } from '../components/AgentTrace'
 import { Conversation } from '../components/Conversation'
 import { DecisionCard } from '../components/DecisionCard'
 import { ProgressSteps } from '../components/ProgressSteps'
@@ -10,6 +11,7 @@ import { StatusBadge } from '../components/StatusBadge'
 import { formatDate, STATUS_INFO } from '../statuses'
 import type { TicketDetail, TicketStatus } from '../types'
 import { useLoad } from '../useLoad'
+import { Skeleton } from '../components/States'
 
 /** How often to check the ticket while an agent is working on it. */
 const POLL_MS = 3000
@@ -48,7 +50,13 @@ export function TicketPage() {
     </p>
   )
 
-  if (loading && !ticket) return <p className="muted">Loading…</p>
+  if (loading && !ticket) {
+    return (
+      <div className="card">
+        <Skeleton rows={6} />
+      </div>
+    )
+  }
   if (error || !ticket) {
     return (
       <>
@@ -85,6 +93,8 @@ export function TicketPage() {
           {ticket.allowedTransitions.length > 0 && <StatusForm ticket={ticket} onChanged={setData} />}
         </aside>
       </div>
+
+      {isAgency && <AgentTrace ticketId={ticket.id} live={agentWorking} refreshKey={`${ticket.status}-${ticket.events.length}`} />}
     </>
   )
 }

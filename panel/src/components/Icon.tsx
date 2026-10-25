@@ -16,6 +16,19 @@ const PATHS = {
   flag: 'M5 21V4m0 0h11l-2 4 2 4H5',
   source: 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Zm0 0v5h5M9 13h6M9 17h4',
   send: 'M4 12 20 4l-6 16-3-7-7-1Z',
+  // Navigation.
+  inbox: 'M4 13h4l2 3h4l2-3h4M5 5h14l1 8v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-5l1-8Z',
+  board: 'M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v6h-4z',
+  globe: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm-9-9h18M12 3c2.5 2.7 3.5 5.7 3.5 9s-1 6.3-3.5 9c-2.5-2.7-3.5-5.7-3.5-9S9.5 5.7 12 3Z',
+  chart: 'M4 20V10m6 10V4m6 16v-7m4 7H3',
+  logout: 'M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l-4-4 4-4M6 12h10',
+  plus: 'M12 5v14M5 12h14',
+  chevron: 'm9 6 6 6-6 6',
+  upload: 'M12 15V4m0 0L8 8m4-4 4 4M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3',
+  clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-13v4l3 2',
+  tool: 'M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4 2.5-2.5Z',
+  terminal: 'M4 5h16v14H4zM8 10l2 2-2 2m5 0h3',
+  spark: 'M12 3v4m0 10v4M3 12h4m10 0h4M6 6l2.5 2.5m7 7L18 18M6 18l2.5-2.5m7-7L18 6',
 } as const
 
 export type IconName = keyof typeof PATHS

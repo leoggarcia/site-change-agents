@@ -143,3 +143,74 @@ export interface Metrics {
   baseline: { hours: number; label: string }
   prices: { models: Record<'intake' | 'coder' | 'reviewer', string>; source: string }
 }
+
+// The agency's live board (api/src/board/board.service.ts).
+export type AgentKey = 'intake' | 'coder' | 'reviewer' | 'publisher' | 'indexer'
+
+export interface AgentActivity {
+  agent: AgentKey
+  working: { ticketId: number | null; label: string; since: string; attempt: number }[]
+  waiting: number
+  retrying: number
+}
+
+export interface BoardTicket {
+  id: number
+  summary: string
+  siteName: string
+  status: TicketStatus
+  since: string
+  waitingForClient: boolean
+  publishing: boolean
+  previewUrl: string | null
+  activeAgent: AgentKey | null
+  activeLabel: string | null
+}
+
+export interface Board {
+  agents: AgentActivity[]
+  tickets: BoardTicket[]
+  at: string
+}
+
+// How the agents worked on a ticket, read from Langfuse (api/src/traces/ticket-trace.ts).
+export type TraceStepKind = 'model' | 'tools' | 'code'
+
+export interface TraceStep {
+  node: string
+  kind: TraceStepKind
+  startMs: number
+  durationMs: number
+  modelCalls: number
+  inputTokens: number
+  outputTokens: number
+  cost: number
+  tools: string[]
+  error: string | null
+}
+
+export interface TraceRun {
+  agent: string
+  traceId: string
+  startTime: string
+  durationMs: number
+  running: boolean
+  setupMs: number
+  models: string[]
+  modelCalls: number
+  toolCalls: number
+  inputTokens: number
+  outputTokens: number
+  cost: number
+  error: string | null
+  steps: TraceStep[]
+  url: string
+}
+
+export interface TicketTrace {
+  available: boolean
+  reason: 'not_configured' | 'unreachable' | null
+  runs: TraceRun[]
+  totals: { durationMs: number; modelCalls: number; toolCalls: number; inputTokens: number; outputTokens: number; cost: number }
+  sessionUrl: string | null
+}

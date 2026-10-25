@@ -1,5 +1,6 @@
 import { Link, useSearchParams } from 'react-router'
 import { api } from '../api'
+import { EmptyState, PageHeader, Skeleton } from '../components/States'
 import { StatusBadge } from '../components/StatusBadge'
 import { formatDate, STATUS_INFO } from '../statuses'
 import type { TicketStatus } from '../types'
@@ -18,26 +19,39 @@ export function AgencyHome() {
 
   return (
     <section>
-      <h1>All requests</h1>
-      <div className="filters">
-        <button type="button" className={filter ? 'chip' : 'chip active'} onClick={() => setParams({})}>
-          All ({tickets.length})
+      <PageHeader title="Requests" subtitle="Every client request, from the first message to the live website." />
+
+      <div className="filters" role="tablist" aria-label="Filter by status">
+        <button type="button" role="tab" aria-selected={!filter} className={filter ? 'chip' : 'chip active'} onClick={() => setParams({})}>
+          All <span className="chip-count">{tickets.length}</span>
         </button>
-        {STATUSES.map((status) => (
+        {STATUSES.filter((status) => count(status) > 0 || filter === status).map((status) => (
           <button
             type="button"
+            role="tab"
+            aria-selected={filter === status}
             key={status}
             className={filter === status ? 'chip active' : 'chip'}
             onClick={() => setParams({ status })}
           >
-            {STATUS_INFO[status].label} ({count(status)})
+            {STATUS_INFO[status].label} <span className="chip-count">{count(status)}</span>
           </button>
         ))}
       </div>
 
-      {loading && <p className="muted">Loading…</p>}
       {error && <p className="error">{error}</p>}
-      {!loading && visible.length === 0 && <p className="muted">No requests here.</p>}
+      {loading && !data && (
+        <div className="card">
+          <Skeleton rows={5} />
+        </div>
+      )}
+      {data && visible.length === 0 && (
+        <div className="card">
+          <EmptyState icon="inbox" title={filter ? `No requests in “${STATUS_INFO[filter].label}”` : 'No requests yet'}>
+            Requests appear here as soon as a client writes one.
+          </EmptyState>
+        </div>
+      )}
 
       {visible.length > 0 && (
         <div className="table-wrap">
@@ -45,7 +59,6 @@ export function AgencyHome() {
             <thead>
               <tr>
                 <th>#</th>
-                <th>Site</th>
                 <th>Request</th>
                 <th>Status</th>
                 <th>Requested by</th>
@@ -55,18 +68,16 @@ export function AgencyHome() {
             <tbody>
               {visible.map((ticket) => (
                 <tr key={ticket.id}>
-                  <td>
-                    <Link to={`/tickets/${ticket.id}`}>#{ticket.id}</Link>
-                  </td>
-                  <td>{ticket.siteName}</td>
+                  <td className="ticket-id">{ticket.id}</td>
                   <td className="request-cell">
                     <Link to={`/tickets/${ticket.id}`}>{ticket.summary ?? ticket.request}</Link>
+                    <span className="muted small block">{ticket.siteName}</span>
                   </td>
                   <td>
                     <StatusBadge status={ticket.status} />
                   </td>
                   <td>{ticket.createdBy.name}</td>
-                  <td className="nowrap">{formatDate(ticket.updatedAt)}</td>
+                  <td className="nowrap muted small">{formatDate(ticket.updatedAt)}</td>
                 </tr>
               ))}
             </tbody>

@@ -4,6 +4,7 @@ import { api } from '../api'
 import { formatDate } from '../statuses'
 import type { ProjectSummaryRecord } from '../types'
 import { useLoad } from '../useLoad'
+import { Skeleton } from '../components/States'
 
 export function SitePage() {
   const siteId = useParams().id ?? ''
@@ -14,7 +15,11 @@ export function SitePage() {
       <p>
         <Link to="/sites">← All sites</Link>
       </p>
-      {loading && <p className="muted">Loading…</p>}
+      {loading && !record && (
+        <div className="card">
+          <Skeleton rows={6} />
+        </div>
+      )}
       {error && (
         <section className="card">
           <h1>{siteId}</h1>

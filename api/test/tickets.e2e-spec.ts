@@ -596,4 +596,42 @@ describe('Tickets (e2e)', () => {
       expect(body.prices.models.reviewer).toBe('gemini-3.1-flash-lite');
     });
   });
+
+  describe('board', () => {
+    it('shows each agent and where every ticket is, for the agency only', async () => {
+      workers.intakeReplies.push({ status: 'question', question: 'Which day?', number: 1, max: 3 });
+      const asking = await createAs(sofia, 'luna-cafe', 'Change the opening hours please');
+      await eventually(async () => expect((await getAs(sofia, asking)).pendingQuestion).not.toBeNull());
+
+      await request(app.getHttpServer()).get('/api/board').set(as(sofia)).expect(403);
+      const { body } = await request(app.getHttpServer()).get('/api/board').set(as(agency)).expect(200);
+
+      expect(body.agents.map((agent: { agent: string }) => agent.agent)).toEqual(['intake', 'coder', 'reviewer', 'publisher', 'indexer']);
+      const card = body.tickets.find((ticket: { id: number }) => ticket.id === asking);
+      expect(card).toMatchObject({ status: 'intake', waitingForClient: true, siteName: 'Luna Café' });
+      expect(new Date(card.since).getTime()).toBeLessThanOrEqual(Date.now());
+      const live = body.tickets.filter((ticket: { status: string }) => ticket.status === 'deployed');
+      expect(live.length).toBeLessThanOrEqual(6);
+    });
+  });
+
+  describe('agent trace', () => {
+    it('is for the agency only, and says so when tracing is off', async () => {
+      const keys = { public: process.env.LANGFUSE_PUBLIC_KEY, secret: process.env.LANGFUSE_SECRET_KEY };
+      delete process.env.LANGFUSE_PUBLIC_KEY;
+      delete process.env.LANGFUSE_SECRET_KEY;
+      try {
+        workers.intakeReplies.push({ status: 'question', question: 'Which day?', number: 1, max: 3 });
+        const id = await createAs(sofia, 'luna-cafe', 'Change the opening hours please');
+
+        await request(app.getHttpServer()).get(`/api/tickets/${id}/trace`).set(as(sofia)).expect(403);
+        await request(app.getHttpServer()).get('/api/tickets/999999/trace').set(as(agency)).expect(404);
+        const { body } = await request(app.getHttpServer()).get(`/api/tickets/${id}/trace`).set(as(agency)).expect(200);
+        expect(body).toMatchObject({ available: false, reason: 'not_configured', runs: [] });
+      } finally {
+        if (keys.public) process.env.LANGFUSE_PUBLIC_KEY = keys.public;
+        if (keys.secret) process.env.LANGFUSE_SECRET_KEY = keys.secret;
+      }
+    });
+  });
 });

@@ -3,6 +3,7 @@ import { api } from '../api'
 import { STATUS_INFO } from '../statuses'
 import type { TicketStatus } from '../types'
 import { useLoad } from '../useLoad'
+import { PageHeader, Skeleton } from '../components/States'
 
 /** The order a ticket moves through, so the counts read like the pipeline. */
 const PIPELINE: TicketStatus[] = [
@@ -44,7 +45,13 @@ function StatTile({ label, value, note }: { label: string; value: string; note?:
 export function MetricsPage() {
   const { data, error, loading } = useLoad(api.metrics)
 
-  if (loading && !data) return <p className="muted">Loading…</p>
+  if (loading && !data) {
+    return (
+      <div className="card">
+        <Skeleton rows={5} />
+      </div>
+    )
+  }
   if (error || !data) return <p className="error">{error ?? 'Could not load the metrics.'}</p>
 
   const { live, baseline } = data
@@ -54,8 +61,7 @@ export function MetricsPage() {
 
   return (
     <section className="metrics">
-      <h1>Metrics</h1>
-      <p className="muted">How requests move from the client's words to the live website, measured from every ticket's history.</p>
+      <PageHeader title="Metrics" subtitle="How requests move from the client's words to the live website, measured from every ticket's history." />
 
       <div className="card hero-metric">
         <span className="stat-label">From request to live (median of {live.count} changes)</span>
