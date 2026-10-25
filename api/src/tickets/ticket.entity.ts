@@ -88,6 +88,19 @@ export class Ticket {
   @Column('jsonb', { name: 'changed_files', nullable: true })
   changedFiles: string[] | null;
 
+  // Delivery (Phase 7): the pull request and where the change can be seen.
+  @Column('int', { name: 'pr_number', nullable: true })
+  prNumber: number | null;
+
+  @Column('text', { name: 'pr_url', nullable: true })
+  prUrl: string | null;
+
+  @Column('text', { name: 'preview_url', nullable: true })
+  previewUrl: string | null;
+
+  @Column('text', { name: 'production_url', nullable: true })
+  productionUrl: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

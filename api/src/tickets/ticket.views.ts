@@ -18,7 +18,10 @@ export interface TicketView {
   /** The Intake Agent's question waiting for the client's answer, if any. */
   pendingQuestion: Ticket['pendingQuestion'];
   /** The Coder Agent's change. Only sent to the agency. */
-  change: { branch: string; commitSha: string | null; files: string[] } | null;
+  change: { branch: string; commitSha: string | null; files: string[]; prNumber: number | null; prUrl: string | null } | null;
+  /** Where the client can see the change before approving it, and where it is live afterwards. */
+  previewUrl: string | null;
+  productionUrl: string | null;
   createdBy: { id: string; name: string };
   createdAt: Date;
   updatedAt: Date;
@@ -49,6 +52,8 @@ export interface TicketDetailView extends TicketView {
   events: TicketEventView[];
   /** Statuses the current user may move this ticket to. Empty for clients. */
   allowedTransitions: TicketStatus[];
+  /** Approved and being published (merge and production deploy running). */
+  publishing: boolean;
 }
 
 export function toTicketView(ticket: Ticket, forAgency = false): TicketView {
@@ -67,8 +72,16 @@ export function toTicketView(ticket: Ticket, forAgency = false): TicketView {
     pendingQuestion: ticket.pendingQuestion,
     change:
       forAgency && ticket.branch
-        ? { branch: ticket.branch, commitSha: ticket.commitSha, files: ticket.changedFiles ?? [] }
+        ? {
+            branch: ticket.branch,
+            commitSha: ticket.commitSha,
+            files: ticket.changedFiles ?? [],
+            prNumber: ticket.prNumber,
+            prUrl: ticket.prUrl,
+          }
         : null,
+    previewUrl: ticket.previewUrl,
+    productionUrl: ticket.productionUrl,
     createdBy: { id: ticket.createdBy.id, name: ticket.createdBy.name },
     createdAt: ticket.createdAt,
     updatedAt: ticket.updatedAt,

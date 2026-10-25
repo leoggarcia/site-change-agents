@@ -61,6 +61,9 @@ export const api = {
     request<Ticket>('/tickets', { method: 'POST', body: JSON.stringify({ siteId, request: text }) }),
   answer: (id: number, answer: string) =>
     request<TicketDetail>(`/tickets/${id}/answer`, { method: 'POST', body: JSON.stringify({ answer }) }),
+  approve: (id: number) => request<TicketDetail>(`/tickets/${id}/approve`, { method: 'POST' }),
+  requestChanges: (id: number, comment: string) =>
+    request<TicketDetail>(`/tickets/${id}/request-changes`, { method: 'POST', body: JSON.stringify({ comment }) }),
   changeStatus: (id: number, status: TicketStatus, message?: string) =>
     request<TicketDetail>(`/tickets/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, message }) }),
 }

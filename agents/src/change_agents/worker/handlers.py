@@ -57,6 +57,7 @@ def make_review_handler(model: BaseChatModel):  # noqa: ANN201
             "acceptance_criteria": data.get("acceptanceCriteria") or [],
             "request": data["request"],
             "conversation": data.get("conversation") or [],
+            "client_feedback": data.get("clientFeedback") or [],
         }
         try:
             workspace = open_ticket_workspace(data["siteId"], data["ticketId"], data["branch"], data["commit"])

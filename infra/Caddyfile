@@ -1,6 +1,7 @@
-# Edge proxy for everything on the VPS.
-# Locally the addresses are http://*.localhost; on the VPS they are real hostnames,
-# and Caddy gets HTTPS certificates for them automatically.
+# Edge proxy for everything on the server.
+# Locally the addresses are http://*.localhost. On a server with its own ports 80/443 they are real
+# hostnames and Caddy gets HTTPS certificates for them. Behind a tunnel (docker-compose.tunnel.yml)
+# they are local ports, and the tunnel does HTTPS.
 
 {$APP_ADDRESS} {
 	handle /api/* {
@@ -11,7 +12,7 @@
 	}
 }
 
-# Client test sites, copied here by each site's GitHub Action:
+# Client test sites, published here by the delivery jobs from each site's GitHub Actions build:
 #   /<site-id>/                      production
 #   /previews/<site-id>/pr-<number>/ preview of a pull request
 {$SITES_ADDRESS} {

@@ -42,7 +42,10 @@ export interface Ticket {
   /** The Intake Agent's question waiting for the client's answer. */
   pendingQuestion: { question: string; number: number; max: number } | null
   /** The Coder Agent's change; only sent to the agency. */
-  change: { branch: string; commitSha: string | null; files: string[] } | null
+  change: { branch: string; commitSha: string | null; files: string[]; prNumber: number | null; prUrl: string | null } | null
+  /** Where the client can see the change before approving it, and where it is live afterwards. */
+  previewUrl: string | null
+  productionUrl: string | null
   createdBy: { id: string; name: string }
   createdAt: string
   updatedAt: string
@@ -79,6 +82,8 @@ export interface ReviewDetails {
 export interface TicketDetail extends Ticket {
   events: TicketEvent[]
   allowedTransitions: TicketStatus[]
+  /** Approved and being published. */
+  publishing: boolean
 }
 
 // Written by the Project Indexer agent (agents/src/change_agents/indexer/schema.py).

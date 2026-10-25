@@ -80,9 +80,12 @@ services:
       REDIS_URL: redis://redis:6379
       SITES_REPOS_DIR: /repos
       KNOWLEDGE_DIR: /knowledge
-      # One clone per ticket, and the npm cache they share.
+      # One clone per ticket, the npm cache they share, and each site's main branch (with GitHub).
       WORKSPACES_DIR: /work/workspaces
       NPM_CACHE_DIR: /work/npm-cache
+      MIRRORS_DIR: /work/mirrors
+      # Delivery jobs publish each build here; Caddy serves the same folder.
+      SITES_DIR: /srv/sites
     # Lets running jobs finish before the container stops.
     stop_grace_period: 60s
     volumes:
@@ -91,6 +94,7 @@ services:
       # Client brand guides, plans and past tickets for RAG.
       - ./knowledge:/knowledge:ro
       - workspaces:/work
+      - ${SITES_DIR:-./data/sites}:/srv/sites
     depends_on:
       postgres:
         condition: service_healthy

@@ -9,7 +9,7 @@ import type { App } from 'supertest/types.js';
 import type { DataSource } from 'typeorm';
 import type { AgentReport, IntakeJob, IntakeResult } from '../src/agents/agent-results.js';
 import { AppModule } from '../src/app.module.js';
-import { AGENT_RESULTS_QUEUE, CODING_QUEUE, INTAKE_QUEUE, REINDEX_QUEUE, REVIEW_QUEUE } from '../src/queues/queues.js';
+import { AGENT_RESULTS_QUEUE, CODING_QUEUE, DELIVERY_QUEUE, INTAKE_QUEUE, REINDEX_QUEUE, REVIEW_QUEUE } from '../src/queues/queues.js';
 import { TicketsService } from '../src/tickets/tickets.service.js';
 import type { UserView } from '../src/users/users.controller.js';
 import { resetTestDatabase, resetTestRedis, TEST_DATABASE_URL, TEST_REDIS_URL } from './setup-database.js';
@@ -30,7 +30,8 @@ class FakeWorkers {
   /** Scripted review verdicts; with none left, reviews approve. */
   reviewVerdicts: ('approved' | 'changes_requested')[] = [];
   codingJobs: { ticketId: number; revision?: { commit: string } }[] = [];
-  reviewJobs: { ticketId: number; conversation: unknown[]; commit: string }[] = [];
+  reviewJobs: { ticketId: number; conversation: unknown[]; clientFeedback: string[]; commit: string }[] = [];
+  deliveryJobs: { action: string; ticketId: number; prNumber?: number }[] = [];
   heldCoding = new Map<number, Job>();
   private readonly connection = { url: TEST_REDIS_URL };
   private readonly results = new Queue(AGENT_RESULTS_QUEUE, { connection: this.connection });
@@ -61,6 +62,7 @@ class FakeWorkers {
         await this.report(job, 'coding', codingDone(job.data.ticketId));
       }
     });
+    this.listenDelivery();
     this.listen(REVIEW_QUEUE, async (job: Job) => {
       this.reviewJobs.push(job.data);
       const status = this.reviewVerdicts.shift() ?? 'approved';
@@ -72,6 +74,28 @@ class FakeWorkers {
         criteria: [{ criterion: 'The footer shows 618 765 4321', met: status === 'approved', evidence: 'business.json' }],
         checks: [{ name: 'Build', passed: true, level: 'blocking', details: 'npm run build', findings: [] }],
       });
+    });
+  }
+
+  /** Stands in for GitHub: pull requests get a preview at once, merges deploy at once. */
+  private listenDelivery(): void {
+    this.listen(DELIVERY_QUEUE, async (job: Job<{ action: string; ticketId: number }>) => {
+      this.deliveryJobs.push(job.data);
+      const id = job.data.ticketId;
+      await this.report(
+        job,
+        'delivery',
+        job.data.action === 'open_pr'
+          ? {
+              status: 'preview_ready',
+              prNumber: 100 + id,
+              prUrl: `https://github.com/leo-sites/site/pull/${100 + id}`,
+              headSha: 'abc123',
+              runUrl: 'https://github.com/run/1',
+              previewUrl: `https://sites.example/previews/site/pr-${100 + id}/`,
+            }
+          : { status: 'deployed', mergeSha: 'def456', runUrl: 'https://github.com/run/2', productionUrl: 'https://sites.example/site/' },
+      );
     });
   }
 
@@ -340,7 +364,13 @@ describe('Tickets (e2e)', () => {
       expect(forAgency.reasoning).toBe('The client gave the new number.');
 
       // The code change: details for the agency, a plain message for the client.
-      expect(agencyView.change).toEqual({ branch: `agent/ticket-${id}`, commitSha: 'abc123', files: ['src/data/business.json'] });
+      expect(agencyView.change).toEqual({
+        branch: `agent/ticket-${id}`,
+        commitSha: 'abc123',
+        files: ['src/data/business.json'],
+        prNumber: null, // no GitHub in these tests
+        prUrl: null,
+      });
       expect(done.change).toBeNull();
       const coded = done.events.find((event: { toStatus: string }) => event.toStatus === 'in_review');
       expect(coded).toMatchObject({ message: 'The change is made and is being checked.', reasoning: null });
@@ -479,6 +509,74 @@ describe('Tickets (e2e)', () => {
       expect(runs.map((job) => job.revision?.commit ?? null)).toEqual([null, 'abc123']);
       expect(ticket.events.at(-1).review.issues[0]).toMatchObject({ severity: 'major', problem: 'Wrong digits.' });
       expect((await getAs(robert, id)).events.at(-1).review).toBeNull(); // review details are for the agency
+    });
+  });
+
+  describe('approval and delivery', () => {
+    const awaitingApproval = async (user: UserView, siteId: string, text: string) => {
+      workers.intakeReplies.push(ready(text));
+      const id = await createAs(user, siteId, text);
+      await eventually(async () => expect(await statusOf(id)).toBe('awaiting_approval'));
+      return id;
+    };
+
+    it('lets the client ask for changes, which the coder makes on the same branch', async () => {
+      const id = await awaitingApproval(sofia, 'luna-cafe', 'Change the phone number to 618 765 4321');
+
+      await request(app.getHttpServer()).post(`/api/tickets/${id}/request-changes`).set(as(emily)).send({ comment: 'x x x' }).expect(404);
+      await request(app.getHttpServer()).post(`/api/tickets/${id}/request-changes`).set(as(sofia)).send({ comment: 'no' }).expect(400);
+      await request(app.getHttpServer())
+        .post(`/api/tickets/${id}/request-changes`)
+        .set(as(sofia))
+        .send({ comment: 'Please make the number bold too.' })
+        .expect(201);
+
+      await eventually(async () => expect(await statusOf(id)).toBe('awaiting_approval'));
+      const revision = workers.codingJobs.filter((job) => job.ticketId === id).at(-1) as { revision?: { feedback: { problem: string }[] } };
+      expect(revision.revision?.feedback[0].problem).toContain('Please make the number bold too.');
+      expect(workers.reviewJobs.filter((job) => job.ticketId === id).at(-1)?.clientFeedback).toEqual(['Please make the number bold too.']);
+      const ticket = await getAs(sofia, id);
+      expect(ticket.events.find((event: { message: string }) => event.message === 'Please make the number bold too.')).toMatchObject({
+        type: 'status_changed',
+        toStatus: 'in_progress',
+        actor: { name: 'Sofia Ramirez', role: 'client' },
+      });
+    });
+
+    it('without GitHub, approving marks the change done', async () => {
+      const id = await awaitingApproval(sofia, 'luna-cafe', 'Change the opening hours');
+
+      await request(app.getHttpServer()).post(`/api/tickets/${id}/approve`).set(as(sofia)).expect(201);
+
+      expect(await statusOf(id)).toBe('deployed');
+      await request(app.getHttpServer()).post(`/api/tickets/${id}/approve`).set(as(sofia)).expect(409);
+    });
+
+    it('with GitHub, opens a pull request with a preview and publishes it when approved', async () => {
+      process.env.GITHUB_ORG = 'leo-sites';
+      process.env.GITHUB_TOKEN = 'test-token';
+      try {
+        const id = await awaitingApproval(robert, 'northside-accounting', 'Change the email address');
+        let ticket = await getAs(robert, id);
+        expect(ticket.previewUrl).toBe(`https://sites.example/previews/site/pr-${100 + id}/`);
+        expect(ticket.change).toBeNull();
+        expect((await getAs(agency, id)).change).toMatchObject({ prNumber: 100 + id });
+        expect(workers.deliveryJobs.find((job) => job.ticketId === id)?.action).toBe('open_pr');
+
+        await request(app.getHttpServer()).post(`/api/tickets/${id}/approve`).set(as(robert)).expect(201);
+        await eventually(async () => expect(await statusOf(id)).toBe('deployed'));
+        ticket = await getAs(robert, id);
+        expect(ticket.productionUrl).toBe('https://sites.example/site/');
+        expect(workers.deliveryJobs.filter((job) => job.ticketId === id).map((job) => job.action)).toEqual(['open_pr', 'merge']);
+
+        const reindex = new Queue(REINDEX_QUEUE, { connection: { url: TEST_REDIS_URL } });
+        const jobs = await reindex.getJobs(['waiting', 'delayed', 'completed', 'failed']);
+        await reindex.close();
+        expect(jobs.some((job) => job.data.siteId === 'northside-accounting')).toBe(true);
+      } finally {
+        delete process.env.GITHUB_ORG;
+        delete process.env.GITHUB_TOKEN;
+      }
     });
   });
 });

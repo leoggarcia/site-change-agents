@@ -169,6 +169,7 @@ source = { editable = "." }
 dependencies = [
     { name = "bullmq" },
     { name = "fastapi", extra = ["standard"] },
+    { name = "httpx" },
     { name = "langchain" },
     { name = "langchain-anthropic" },
     { name = "langchain-core" },
@@ -190,6 +191,7 @@ dev = [
 requires-dist = [
     { name = "bullmq", specifier = ">=3.4.3" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.161.1" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain", specifier = ">=1.4.7" },
     { name = "langchain-anthropic", specifier = ">=1.7.6" },
     { name = "langchain-core", specifier = ">=1.7.0" },

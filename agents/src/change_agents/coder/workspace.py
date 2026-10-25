@@ -10,6 +10,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from change_agents import repos
 from change_agents.config import get_settings
 
 AGENT_AUTHOR = ("Site Change Agent", "agent@site-change-agents.local")
@@ -43,12 +44,11 @@ def _run(args: list[str], cwd: Path, timeout: int = 120, env: dict[str, str] | N
     return subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout, env=env)
 
 
-def _git(cwd: Path, *args: str) -> str:
-    # safe.directory: the source repo may belong to another user (e.g. a read-only Docker mount).
-    result = _run(["git", "-c", "safe.directory=*", *args], cwd)
-    if result.returncode != 0:
-        raise WorkspaceError(f"git {' '.join(args)} failed: {result.stderr.strip()[:500]}")
-    return result.stdout
+def _git(cwd: Path, *args: str, auth: bool = False) -> str:
+    try:
+        return repos.git(cwd, *args, auth=auth)
+    except repos.GitError as error:
+        raise WorkspaceError(str(error)) from error
 
 
 class Workspace:
@@ -59,15 +59,11 @@ class Workspace:
     @classmethod
     def create(cls, site_id: str, name: str, branch: str) -> "Workspace":
         settings = get_settings()
-        source = settings.sites_repos_dir / site_id
-        if not (source / ".git").exists():
-            raise WorkspaceError(f"No git repository for site '{site_id}' at {source}.")
-
         root = settings.workspaces_dir / name
         if root.exists():
             shutil.rmtree(root)  # a retry starts clean
         root.parent.mkdir(parents=True, exist_ok=True)
-        _git(root.parent, "clone", "--quiet", str(source), root.name)
+        _git(root.parent, "clone", "--quiet", repos.source(site_id), root.name, auth=True)
         _git(root, "checkout", "--quiet", "-b", branch)
         return cls(root, branch)
 
@@ -146,6 +142,14 @@ class Workspace:
         name, email = AGENT_AUTHOR
         _git(self.root, "add", "--all")
         _git(self.root, "-c", f"user.name={name}", "-c", f"user.email={email}", "commit", "--quiet", "-m", message)
+        return _git(self.root, "rev-parse", "HEAD").strip()
+
+    def push(self) -> str:
+        """Publishes the branch to the site's repository. Returns the pushed commit.
+
+        Forced, because the branch belongs to the agent: a retried coding run rewrites it from main.
+        """
+        _git(self.root, "push", "--quiet", "--force", "origin", f"HEAD:refs/heads/{self.branch}", auth=True)
         return _git(self.root, "rev-parse", "HEAD").strip()
 
     def show_last_commit(self) -> str:

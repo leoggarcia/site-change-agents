@@ -6,6 +6,7 @@ import { AnswerQuestionDto } from './dto/answer-question.dto.js';
 import { ChangeStatusDto } from './dto/change-status.dto.js';
 import { CreateTicketDto } from './dto/create-ticket.dto.js';
 import { ListTicketsQuery } from './dto/list-tickets.query.js';
+import { RequestChangesDto } from './dto/request-changes.dto.js';
 import { PipelineService } from './pipeline.service.js';
 import { TicketsService } from './tickets.service.js';
 import type { TicketDetailView, TicketView } from './ticket.views.js';
@@ -45,6 +46,24 @@ export class TicketsController {
     await this.ticketsService.changeStatus(id, dto.status, { type: 'user', user }, dto.message);
     // e.g. back to "intake" runs the Intake Agent again; "pending" queues the ticket for coding.
     await this.pipeline.afterManualChange(await this.ticketsService.findById(id));
+    return this.ticketsService.get(user, id);
+  }
+
+  /** The client (or the agency) approves the preview; the change is then published. */
+  @Post(':id/approve')
+  async approve(@CurrentUser() user: User, @Param('id', ParseIntPipe) id: number): Promise<TicketDetailView> {
+    await this.pipeline.approve(user, id);
+    return this.ticketsService.get(user, id);
+  }
+
+  /** The client (or the agency) asks for changes after seeing the preview. */
+  @Post(':id/request-changes')
+  async requestChanges(
+    @CurrentUser() user: User,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: RequestChangesDto,
+  ): Promise<TicketDetailView> {
+    await this.pipeline.requestChanges(user, id, dto.comment);
     return this.ticketsService.get(user, id);
   }
 

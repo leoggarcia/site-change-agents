@@ -3,6 +3,7 @@
 import hashlib
 from collections.abc import Sequence
 
+from change_agents import repos
 from change_agents.config import get_settings
 from change_agents.db import connect
 from change_agents.rag.chunking import CodeChunk, KnowledgeChunk, chunk_code, chunk_markdown
@@ -31,7 +32,7 @@ def index_code(site_id: str, strategy: str = "contextual", embedder: Embedder | 
             "SELECT summary FROM project_summaries WHERE site_id = %s ORDER BY created_at DESC LIMIT 1", (site_id,)
         ).fetchone()
         summary = row[0] if row else None
-        chunks = chunk_code(RepoSandbox(settings.sites_repos_dir / site_id), strategy, summary)
+        chunks = chunk_code(RepoSandbox(repos.checkout(site_id)), strategy, summary)
 
         wanted = {(c.file_path, c.chunk_index): (c, _fingerprint(embedder.model_name, c.embedding_text())) for c in chunks}
         existing = dict(

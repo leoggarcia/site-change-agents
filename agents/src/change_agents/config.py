@@ -50,7 +50,23 @@ class Settings(BaseSettings):
     workspaces_dir: Path = PROJECT_ROOT / "data" / "workspaces"
     npm_cache_dir: Path = PROJECT_ROOT / "data" / "npm-cache"
 
-    @field_validator("sites_repos_dir", "knowledge_dir", "workspaces_dir", "npm_cache_dir")
+    # GitHub (Phase 7). With both set, sites are cloned from and pushed to github.com/<org>/<site id>,
+    # and each change becomes a pull request. Without them, everything stays in local folders.
+    github_org: str = ""
+    github_token: str = ""
+    # Local copies of each site's main branch, kept up to date from GitHub, for indexing.
+    mirrors_dir: Path = PROJECT_ROOT / "data" / "mirrors"
+    # Where the deploy workflow publishes the sites (the SITES_BASE_URL variable of the site repos).
+    sites_base_url: str = ""
+    # The folder the web server serves the sites from. Delivery jobs download each build there:
+    # <sites_dir>/<site id>/ for production and <sites_dir>/previews/<site id>/pr-<n>/ for previews.
+    sites_dir: Path = PROJECT_ROOT / "data" / "sites"
+
+    @property
+    def github_enabled(self) -> bool:
+        return bool(self.github_org and self.github_token)
+
+    @field_validator("sites_repos_dir", "knowledge_dir", "workspaces_dir", "npm_cache_dir", "mirrors_dir", "sites_dir")
     @classmethod
     def _relative_to_project_root(cls, path: Path) -> Path:
         return path if path.is_absolute() else (PROJECT_ROOT / path).resolve()

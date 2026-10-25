@@ -6,6 +6,7 @@ requires-python = ">=3.13"
 dependencies = [
     "bullmq>=3.4.3",
     "fastapi[standard]>=0.161.1",
+    "httpx>=0.28.1",
     "langchain>=1.4.7",
     "langchain-anthropic>=1.7.6",
     "langchain-core>=1.7.0",
@@ -28,6 +29,7 @@ agents-worker = "change_agents.worker.main:main"
 coder-run = "change_agents.coder.cli:main"
 review-run = "change_agents.reviewer.cli:main"
 review-eval = "change_agents.reviewer.evaluate:main"
+publish-site = "change_agents.delivery.publish:publish_site_main"
 
 [dependency-groups]
 dev = [

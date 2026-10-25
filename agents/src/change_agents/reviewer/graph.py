@@ -48,9 +48,13 @@ def _ticket_block(ticket: dict[str, Any]) -> str:
     conversation = "\n".join(
         f"Q{i}: {item['question']}\nA{i}: {item['answer']}" for i, item in enumerate(ticket.get("conversation") or [], start=1)
     )
+    # What the client asked to change after seeing a preview: part of the request from then on.
+    feedback = "\n".join(f"- {item}" for item in ticket.get("client_feedback") or [])
+    feedback_block = f"<client_feedback>\n{feedback}\n</client_feedback>\n\n" if feedback else ""
     return (
         f"<client_request>\n{ticket.get('request') or ticket['summary']}\n</client_request>\n\n"
         f"<conversation>\n{conversation or '(no questions were asked)'}\n</conversation>\n\n"
+        f"{feedback_block}"
         f"<ticket>\nSummary: {ticket['summary']}\nDetails: {ticket.get('details') or ''}\n"
         f"Acceptance criteria:\n{criteria}\n</ticket>"
     )

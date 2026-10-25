@@ -9,6 +9,7 @@ import time
 
 from langchain_core.messages import AIMessage
 
+from change_agents import repos
 from change_agents.config import get_settings
 from change_agents.indexer.graph import build_indexer_graph, initial_state
 from change_agents.indexer.markdown import to_markdown
@@ -32,7 +33,7 @@ def main() -> None:
     if not args.dry_run and not site_exists(args.site_id):
         sys.exit(f'Unknown site "{args.site_id}". Seed the database first (api: npm run seed).')
 
-    repo = settings.sites_repos_dir / args.site_id
+    repo = repos.checkout(args.site_id)
     graph = build_indexer_graph(chat_model(settings.indexer_model), make_read_only_tools(RepoSandbox(repo)))
 
     print(f"Indexing {args.site_id} with {settings.indexer_model}\n")

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from change_agents import repos
 from change_agents.coder import workspace as workspace_module
 from change_agents.coder.policy import ChangeLimits, path_problem
 from change_agents.coder.tools import Editor
@@ -101,8 +102,11 @@ def test_workspace_clones_branches_and_commits(tmp_path: Path, monkeypatch: pyte
     (source / "src" / "components" / "Footer.astro").write_text(FOOTER)
     for args in (["init", "-q", "-b", "main"], ["add", "-A"], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init"]):
         subprocess.run(["git", *args], cwd=source, check=True)
-    settings = SimpleNamespace(sites_repos_dir=tmp_path / "repos", workspaces_dir=tmp_path / "work", npm_cache_dir=tmp_path / "npm")
+    settings = SimpleNamespace(
+        sites_repos_dir=tmp_path / "repos", workspaces_dir=tmp_path / "work", npm_cache_dir=tmp_path / "npm", github_enabled=False
+    )
     monkeypatch.setattr(workspace_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(repos, "get_settings", lambda: settings)
 
     workspace = Workspace.create("test-site", "ticket-1", "agent/ticket-1")
     Editor(RepoSandbox(workspace.root)).edit("src/components/Footer.astro", ">618 123 4567<", ">618 765 4321<")

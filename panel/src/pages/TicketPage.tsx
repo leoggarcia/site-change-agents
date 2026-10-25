@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router'
 import { api } from '../api'
 import { useAuth } from '../auth'
 import { Conversation } from '../components/Conversation'
+import { DecisionCard } from '../components/DecisionCard'
 import { ProgressSteps } from '../components/ProgressSteps'
 import { StatusBadge } from '../components/StatusBadge'
 import { formatDate, STATUS_INFO } from '../statuses'
@@ -31,7 +32,8 @@ export function TicketPage() {
   const { data: ticket, error, loading, setData } = useLoad(() => api.ticket(id), [id])
 
   // Check again until the agent asks something or finishes.
-  const agentWorking = ticket !== null && !ticket.pendingQuestion && AGENT_STATUSES.includes(ticket.status)
+  const agentWorking =
+    ticket !== null && ((!ticket.pendingQuestion && AGENT_STATUSES.includes(ticket.status)) || ticket.publishing)
   useEffect(() => {
     if (!agentWorking) return
     const timer = setTimeout(() => {
@@ -72,7 +74,10 @@ export function TicketPage() {
       </header>
 
       <div className="ticket-layout">
-        <Conversation ticket={ticket} isAgency={isAgency} onChanged={setData} />
+        <div className="ticket-main">
+          <DecisionCard ticket={ticket} onChanged={setData} />
+          <Conversation ticket={ticket} isAgency={isAgency} onChanged={setData} />
+        </div>
 
         <aside className="ticket-side">
           <TicketCard ticket={ticket} />
@@ -136,6 +141,16 @@ function CodeChange({ change }: { change: NonNullable<TicketDetail['change']> })
         </dd>
         <dt>Commit</dt>
         <dd>{change.commitSha ? <code>{change.commitSha.slice(0, 7)}</code> : '—'}</dd>
+        <dt>Pull request</dt>
+        <dd>
+          {change.prUrl ? (
+            <a href={change.prUrl} target="_blank" rel="noreferrer">
+              #{change.prNumber} on GitHub ↗
+            </a>
+          ) : (
+            '—'
+          )}
+        </dd>
         <dt>Files</dt>
         <dd>
           <ul className="file-list">
@@ -147,7 +162,6 @@ function CodeChange({ change }: { change: NonNullable<TicketDetail['change']> })
           </ul>
         </dd>
       </dl>
-      <p className="muted small">The pull request and its preview arrive in Phase 7.</p>
     </section>
   )
 }

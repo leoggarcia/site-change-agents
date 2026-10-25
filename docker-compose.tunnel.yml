@@ -1,0 +1,21 @@
+# For a server behind a tunnel (e.g. Cloudflare Tunnel) or another reverse proxy that already owns
+# ports 80 and 443. Caddy listens on two local ports and the tunnel sends each hostname to one of them;
+# HTTPS is handled by the tunnel. Postgres and Redis are not published on the host at all.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --build
+#
+# In .env:  APP_ADDRESS=http://:80   SITES_ADDRESS=http://:8081
+# Tunnel:   app hostname   -> http://localhost:${APP_PORT:-3020}
+#           sites hostname -> http://localhost:${SITES_PORT:-3021}
+
+services:
+  caddy:
+    ports: !override
+      - "127.0.0.1:${APP_PORT:-3020}:80"
+      - "127.0.0.1:${SITES_PORT:-3021}:8081"
+
+  postgres:
+    ports: !reset []
+
+  redis:
+    ports: !reset []

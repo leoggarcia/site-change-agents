@@ -2,7 +2,7 @@ import { ConflictException, ForbiddenException, Injectable, NotFoundException } 
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import type { EntityManager, FindOptionsWhere } from 'typeorm';
-import type { ReviewIssue } from '../agents/agent-results.js';
+import type { ReviewIssue, ReviewResult } from '../agents/agent-results.js';
 import { SitesService } from '../sites/sites.service.js';
 import type { User } from '../users/user.entity.js';
 import type { CreateTicketDto } from './dto/create-ticket.dto.js';
@@ -21,7 +21,19 @@ export interface StatusChangeOptions {
   fields?: Partial<
     Pick<
       Ticket,
-      'summary' | 'changeType' | 'target' | 'details' | 'acceptanceCriteria' | 'risk' | 'branch' | 'commitSha' | 'changedFiles'
+      | 'summary'
+      | 'changeType'
+      | 'target'
+      | 'details'
+      | 'acceptanceCriteria'
+      | 'risk'
+      | 'branch'
+      | 'commitSha'
+      | 'changedFiles'
+      | 'prNumber'
+      | 'prUrl'
+      | 'previewUrl'
+      | 'productionUrl'
     >
   >;
   data?: Record<string, unknown>;
@@ -41,7 +53,8 @@ export class TicketsService {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     @InjectRepository(Ticket) private readonly tickets: Repository<Ticket>,
-    @InjectRepository(TicketEvent) private readonly events: Repository<TicketEvent>,
+    @InjectRepository(TicketEvent)
+    private readonly events: Repository<TicketEvent>,
     private readonly sitesService: SitesService,
   ) {}
 
@@ -50,7 +63,12 @@ export class TicketsService {
 
     const ticketId = await this.dataSource.transaction(async (manager) => {
       const ticket = await manager.save(
-        manager.create(Ticket, { siteId: site.id, createdById: user.id, request: dto.request, status: 'intake' }),
+        manager.create(Ticket, {
+          siteId: site.id,
+          createdById: user.id,
+          request: dto.request,
+          status: 'intake',
+        }),
       );
       await this.addEvent(manager, ticket.id, { type: 'user', user }, 'created', 'Request received.', {
         toStatus: 'intake',
@@ -91,6 +109,7 @@ export class TicketsService {
       ...toTicketView(ticket, user.role === 'agency'),
       events: events.map((event) => toTicketEventView(event, user.role === 'agency')),
       allowedTransitions: user.role === 'agency' ? [...TICKET_TRANSITIONS[ticket.status]] : [],
+      publishing: ticket.status === 'awaiting_approval' && (await this.isApprovedInCurrentRound(id)),
     };
   }
 
@@ -100,7 +119,13 @@ export class TicketsService {
    * With `onlyFrom`, nothing happens (and it returns false) if the ticket has already left that status:
    * a slow agent must not override what a person did in the meantime.
    */
-  async changeStatus(id: number, to: TicketStatus, actor: Actor, message?: string, options: StatusChangeOptions = {}): Promise<boolean> {
+  async changeStatus(
+    id: number,
+    to: TicketStatus,
+    actor: Actor,
+    message?: string,
+    options: StatusChangeOptions = {},
+  ): Promise<boolean> {
     if (actor.type === 'user' && actor.user.role !== 'agency') {
       throw new ForbiddenException('Only the agency can change a ticket status.');
     }
@@ -124,7 +149,11 @@ export class TicketsService {
     return this.dataSource.transaction(async (manager) => {
       // Locking the site row makes claims for the same site wait for each other.
       await manager.query('SELECT id FROM sites WHERE id = $1 FOR UPDATE', [siteId]);
-      if (await manager.count(Ticket, { where: { siteId, status: In(SITE_BUSY_STATUSES) } })) {
+      if (
+        await manager.count(Ticket, {
+          where: { siteId, status: In(SITE_BUSY_STATUSES) },
+        })
+      ) {
         return null;
       }
       const next = await manager.findOne(Ticket, {
@@ -141,7 +170,11 @@ export class TicketsService {
 
   /** Adds a note to the history, e.g. that an attempt failed and will be retried. */
   async addNote(id: number, actor: Actor, message: string, data?: Record<string, unknown>): Promise<void> {
-    await this.dataSource.transaction((manager) => this.addEvent(manager, id, actor, 'note', message, { data: data ?? null }));
+    await this.dataSource.transaction((manager) =>
+      this.addEvent(manager, id, actor, 'note', message, {
+        data: data ?? null,
+      }),
+    );
   }
 
   /** How many times the ticket has entered a status. Numbers each run of a stage (thread and job ids). */
@@ -155,7 +188,12 @@ export class TicketsService {
 
   /** Tickets an agent should be working on right now. Used to re-add lost jobs after a restart. */
   async findInFlight(): Promise<Ticket[]> {
-    return this.tickets.find({ where: { status: In(['intake', 'in_progress', 'in_review']) }, order: { id: 'ASC' } });
+    return this.tickets.find({
+      where: {
+        status: In(['intake', 'in_progress', 'in_review', 'awaiting_approval']),
+      },
+      order: { id: 'ASC' },
+    });
   }
 
   async sitesWithPendingTickets(): Promise<string[]> {
@@ -165,14 +203,126 @@ export class TicketsService {
     return rows.map((row) => row.site_id);
   }
 
+  // ---- The client's decision on the preview ----
+
+  /** Records that the client (or the agency) approved the preview. Approving twice is refused. */
+  async recordApproval(user: User, id: number): Promise<Ticket> {
+    return this.dataSource.transaction(async (manager) => {
+      const ticket = await this.lockForDecision(manager, user, id);
+      if (await this.approvedSince(manager, id)) {
+        throw new ConflictException('This change is already approved and being published.');
+      }
+      await this.addEvent(manager, id, { type: 'user', user }, 'note', 'Approved the change.', {
+        data: { approved: true },
+      });
+      return ticket;
+    });
+  }
+
+  /** The client asks for changes after seeing the preview: back to in_progress, with their words as the reason. */
+  async recordChangeRequest(user: User, id: number, comment: string): Promise<Ticket> {
+    return this.dataSource.transaction(async (manager) => {
+      const ticket = await this.lockForDecision(manager, user, id);
+      if (await this.approvedSince(manager, id)) {
+        throw new ConflictException('This change is already approved and being published.');
+      }
+      await this.applyStatusChange(manager, ticket, 'in_progress', { type: 'user', user }, comment, {
+        data: { clientRequest: true },
+      });
+      return ticket;
+    });
+  }
+
+  private async lockForDecision(manager: EntityManager, user: User, id: number): Promise<Ticket> {
+    const ticket = await manager.findOne(Ticket, {
+      where: { id },
+      relations: { site: true },
+      lock: { mode: 'pessimistic_write', tables: ['tickets'] },
+    });
+    if (!ticket || (user.role !== 'agency' && ticket.site.clientId !== user.clientId)) {
+      throw new NotFoundException(`Ticket ${id} not found.`);
+    }
+    if (ticket.status !== 'awaiting_approval') {
+      throw new ConflictException('This change is not waiting for approval.');
+    }
+    return ticket;
+  }
+
+  private async approvedSince(manager: EntityManager, id: number): Promise<boolean> {
+    const rows: unknown[] = await manager.query(
+      `SELECT 1 FROM ticket_events
+       WHERE ticket_id = $1 AND type = 'note' AND (data->>'approved')::boolean
+         AND id > (SELECT max(id) FROM ticket_events WHERE ticket_id = $1 AND to_status = 'awaiting_approval')`,
+      [id],
+    );
+    return rows.length > 0;
+  }
+
+  async isApprovedInCurrentRound(id: number): Promise<boolean> {
+    return this.approvedSince(this.dataSource.manager, id);
+  }
+
+  /** The reviewer's approval in the ticket's current review, if any (to re-add a lost delivery job). */
+  async reviewerApprovalInCurrentRound(id: number): Promise<ReviewResult | null> {
+    const rows: { data: Record<string, unknown> }[] = await this.dataSource.query(
+      `SELECT data FROM ticket_events
+       WHERE ticket_id = $1 AND type = 'note' AND (data->>'approvedByReviewer')::boolean
+         AND id > (SELECT max(id) FROM ticket_events WHERE ticket_id = $1 AND to_status = 'in_review')
+       ORDER BY id DESC LIMIT 1`,
+      [id],
+    );
+    const data = rows[0]?.data;
+    return data
+      ? ({
+          ...data,
+          summary: data.reasoning,
+          status: 'approved',
+        } as unknown as ReviewResult)
+      : null;
+  }
+
+  /** What the client asked to change after seeing previews, oldest first. The reviewer checks these too. */
+  async clientChangeRequests(id: number): Promise<string[]> {
+    const events = await this.events.find({
+      where: { ticketId: id, toStatus: 'in_progress', actorType: 'user' },
+      order: { id: 'ASC' },
+    });
+    return events.map((event) => event.message ?? '').filter(Boolean);
+  }
+
+  /** How many times the reviewer sent the change back since the client last asked for changes (or ever). */
+  async reviewRejectionsSinceClientRequest(id: number): Promise<number> {
+    const events = await this.events.find({
+      where: { ticketId: id, toStatus: 'in_progress' },
+      order: { id: 'DESC' },
+    });
+    let count = 0;
+    for (const event of events) {
+      if (event.actorType === 'user') break;
+      if (event.actorAgent === 'reviewer') count += 1;
+    }
+    return count;
+  }
+
   /** If the ticket is in_progress because the reviewer sent it back: the commit and issues to fix (for recovery). */
   async pendingRevision(ticket: Ticket): Promise<{ commit: string; feedback: ReviewIssue[] } | undefined> {
     const last = await this.events.findOne({
       where: { ticketId: ticket.id, toStatus: 'in_progress' },
       order: { id: 'DESC' },
     });
-    if (!ticket.commitSha || last?.actorAgent !== 'reviewer') return undefined;
-    return { commit: ticket.commitSha, feedback: (last.data?.issues as ReviewIssue[] | undefined) ?? [] };
+    if (!ticket.commitSha || !last || (last.actorAgent !== 'reviewer' && last.actorType !== 'user')) return undefined;
+    const feedback: ReviewIssue[] =
+      last.actorType === 'user'
+        ? [
+            {
+              severity: 'major',
+              file: null,
+              problem: `After seeing the preview, the client asked for changes: ${last.message}`,
+              fix: 'Make the change the client describes.',
+            },
+          ]
+        : ((last.data?.issues as ReviewIssue[] | undefined) ?? []);
+    return { commit: ticket.commitSha, feedback };
   }
 
   /** The questions and answers of the latest intake run, in order. The reviewer needs them: answers can correct the request. */
@@ -239,7 +389,9 @@ export class TicketsService {
 
       const questionNumber = ticket.pendingQuestion.number;
       await manager.update(Ticket, { id }, { pendingQuestion: null });
-      await this.addEvent(manager, id, { type: 'user', user }, 'client_answer', answer, { data: { number: questionNumber } });
+      await this.addEvent(manager, id, { type: 'user', user }, 'client_answer', answer, {
+        data: { number: questionNumber },
+      });
       return { questionNumber };
     });
   }
@@ -268,7 +420,10 @@ export class TicketsService {
 
   private async lock(manager: EntityManager, id: number): Promise<Ticket> {
     // Lock the row so two changes to the same ticket can't interleave.
-    const ticket = await manager.findOne(Ticket, { where: { id }, lock: { mode: 'pessimistic_write' } });
+    const ticket = await manager.findOne(Ticket, {
+      where: { id },
+      lock: { mode: 'pessimistic_write' },
+    });
     if (!ticket) {
       throw new NotFoundException(`Ticket ${id} not found.`);
     }
@@ -284,12 +439,21 @@ export class TicketsService {
     extra: Partial<Pick<TicketEvent, 'fromStatus' | 'toStatus' | 'data'>> = {},
   ): Promise<void> {
     await manager.save(
-      manager.create(TicketEvent, { ticketId, type, ...actorColumns(actor), message: message?.trim() || null, ...extra }),
+      manager.create(TicketEvent, {
+        ticketId,
+        type,
+        ...actorColumns(actor),
+        message: message?.trim() || null,
+        ...extra,
+      }),
     );
   }
 
   private async findWithRelations(id: number): Promise<Ticket> {
-    const ticket = await this.tickets.findOne({ where: { id }, relations: { site: true, createdBy: true } });
+    const ticket = await this.tickets.findOne({
+      where: { id },
+      relations: { site: true, createdBy: true },
+    });
     if (!ticket) {
       throw new NotFoundException(`Ticket ${id} not found.`);
     }

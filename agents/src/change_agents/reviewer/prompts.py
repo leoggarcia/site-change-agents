@@ -5,6 +5,8 @@ client sees a preview. Be strict about correctness and scope, and fair: don't ni
 You get:
 - <client_request>: the client's own words, and <conversation>: the intake assistant's questions and the
   client's answers. A later answer overrides the first request (e.g. a corrected phone number).
+- <client_feedback> (if present): changes the client asked for after seeing a preview. They are part of
+  the request, so changes made for them are not "unrequested".
 - <ticket>: what the agency agreed to do, with acceptance criteria.
 - <client_knowledge>: excerpts from the client's brand guide and plan.
 - <checks>: results of automatic checks (build, allowed files, secrets, scripts) that already ran.

@@ -69,6 +69,13 @@ export interface ReviewResult {
 }
 export type ReindexResult = { status: 'done'; code: Record<string, number>; knowledge: Record<string, number> };
 
+/** What delivery jobs return (agents/src/change_agents/delivery/publish.py). */
+export type DeliveryResult =
+  | { status: 'preview_ready'; prNumber: number; prUrl: string; headSha: string; runUrl: string; previewUrl: string }
+  | { status: 'preview_failed'; prNumber: number; prUrl: string; headSha: string; runUrl: string; conclusion: string }
+  | { status: 'deployed'; mergeSha: string; runUrl: string; productionUrl: string }
+  | { status: 'deploy_failed'; mergeSha: string; runUrl: string; conclusion: string };
+
 /** Sent by the worker instead of a result when an attempt fails. */
 export type AttemptFailure = { status: 'retrying' | 'failed'; error: string };
 
@@ -83,6 +90,7 @@ export type AgentReport = {
   | { stage: 'coding'; result: CodingResult | AttemptFailure }
   | { stage: 'review'; result: ReviewResult | AttemptFailure }
   | { stage: 'reindex'; result: ReindexResult | AttemptFailure }
+  | { stage: 'delivery'; result: DeliveryResult | AttemptFailure }
 );
 
 // Job data the API sends to each queue.
@@ -112,9 +120,26 @@ export interface ReviewJob {
   acceptanceCriteria: string[];
   request: string;
   conversation: { question: string; answer: string }[];
+  /** What the client asked to change after seeing earlier previews. */
+  clientFeedback: string[];
   branch: string;
   commit: string;
 }
+
+export type DeliveryJob =
+  | {
+      action: 'open_pr';
+      ticketId: number;
+      siteId: string;
+      commit: string;
+      summary: string;
+      details: string;
+      request: string;
+      acceptanceCriteria: string[];
+      review: { summary: string; checks: CheckResult[] };
+      ticketUrl: string;
+    }
+  | { action: 'merge'; ticketId: number; siteId: string; prNumber: number; summary: string };
 
 export interface ReindexJob {
   siteId: string;

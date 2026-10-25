@@ -1031,3 +1031,69 @@ code {
   background: var(--bg);
   color: var(--muted);
 }
+
+/* Approval */
+
+.ticket-main {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.ticket-main .card {
+  margin: 0;
+}
+
+.decision {
+  display: grid;
+  gap: 1rem;
+  border-color: var(--accent);
+}
+
+.decision h2 {
+  margin: 0 0 0.25rem;
+}
+
+.decision p {
+  margin: 0;
+}
+
+.decision-row,
+.decision-live,
+.decision:has(> .dots) {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.decision-live {
+  border-color: var(--success-text);
+  background: var(--success-bg);
+}
+
+a.button {
+  display: inline-block;
+  padding: 0.6rem 1.25rem;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+a.button.secondary-button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+button.primary {
+  padding: 0.6rem 1.25rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}

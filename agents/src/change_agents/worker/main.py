@@ -15,6 +15,7 @@ from change_agents.intake.context import load_context
 from change_agents.intake.graph import build_intake_graph
 from change_agents.intake.runner import IntakeRunner
 from change_agents.llm import chat_model
+from change_agents.delivery import publish
 from change_agents.worker.handlers import make_coding_handler, make_intake_handler, make_review_handler, reindex
 from change_agents.worker.processor import make_processor
 from change_agents.worker.watchdog import watch
@@ -29,6 +30,8 @@ STAGES = {
     "coding": (None, 2, 900),
     "review": (None, 2, 300),
     "reindex": (reindex, 1, 900),
+    # Pushes, opens or merges a pull request, then waits for the site's deploy workflow to finish.
+    "delivery": (publish.handle, 2, 900),
 }
 
 
