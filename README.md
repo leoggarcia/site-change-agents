@@ -176,6 +176,11 @@ infra/      Caddyfile
 docs/       server setup and the demo script
 ```
 
+## How it was built
+
+Built by Leo García with the help of [Claude Code](https://claude.com/claude-code), Anthropic's coding
+agent, working phase by phase from a written plan.
+
 ## Limits and next steps
 
 - The demo sign-in has no passwords (it is protected by Cloudflare Access on the server); real
