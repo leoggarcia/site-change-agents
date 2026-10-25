@@ -4,9 +4,10 @@ Field descriptions are sent to the model as part of the JSON schema. Pydantic th
 anything that fails here goes back to the model with the error message, so it can fix its answer.
 """
 
+from functools import lru_cache
 from typing import Literal, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, create_model, model_validator
 
 ChangeType = Literal["content_update", "style_change", "new_section", "image_change"]
 Risk = Literal["low", "medium", "high"]
@@ -68,3 +69,24 @@ class IntakeDecision(BaseModel):
         if not getattr(self, required):
             raise ValueError(f'action "{self.action}" requires the "{required}" field')
         return self
+
+
+@lru_cache
+def decision_schema(routes: tuple[str, ...]) -> type[IntakeDecision]:
+    """IntakeDecision where target.page can only be one of the site's pages (or "global").
+
+    In the JSON schema this becomes an enum, which providers with constrained decoding enforce while the
+    model writes: an invalid page can't be produced at all, instead of being rejected and retried.
+    """
+    if not routes:
+        return IntakeDecision
+    page_field = Target.model_fields["page"]
+    site_target = create_model(
+        "Target", __base__=Target, page=(Literal[tuple([*routes, "global"])], Field(description=page_field.description))
+    )
+    site_ticket = create_model("TicketDraft", __base__=TicketDraft, target=(site_target, ...))
+    return create_model(
+        "IntakeDecision",
+        __base__=IntakeDecision,
+        ticket=(site_ticket | None, Field(default=None, description="Only for create_ticket. Otherwise null.")),
+    )

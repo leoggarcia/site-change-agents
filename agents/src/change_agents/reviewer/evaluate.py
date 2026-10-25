@@ -38,17 +38,11 @@ def _plant(workspace: Workspace, case: dict[str, Any]) -> None:
     workspace.commit(f"Eval case {case['id']}")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Measure what the checks and the Reviewer Agent catch.")
-    parser.add_argument("--only", nargs="*", help="Case ids to run.")
-    args = parser.parse_args()
-
+def evaluate(model_name: str, only: list[str] | None = None, verbose: bool = True) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Plants each case on a branch and reviews it. Returns the rows and the metrics."""
     data = json.loads(DATASET.read_text())
-    cases = [case for case in data["cases"] if not args.only or case["id"] in args.only]
-    settings = get_settings()
-    model = chat_model(settings.reviewer_model)
-
-    print(f"Reviewing {len(cases)} planted changes on {SITE} with {settings.reviewer_model}\n")
+    cases = [case for case in data["cases"] if not only or case["id"] in only]
+    model = chat_model(model_name)
     workspace = Workspace.create(SITE, f"eval-review-{SITE}", "eval/base")
     workspace.install()
 
@@ -58,23 +52,36 @@ def main() -> None:
         _plant(workspace, case)
         ticket = {"id": case["id"], "site_id": SITE, "conversation": [], **data["tickets"][case["ticket"]]}
         result = run_reviewer(ticket, workspace, model)
-        rows.append((case, result))
-        first = result["issues"][0]["problem"] if result["issues"] else "-"
-        print(f"{case['id']:22} expected {case['expect']:8} → {result['status']:17} by {result['decidedBy']:8}  {first[:90]}")
+        rows.append({"case": case, "run": result})
+        if verbose:
+            first = result["issues"][0]["problem"] if result["issues"] else "-"
+            print(f"{case['id']:22} expected {case['expect']:8} → {result['status']:17} by {result['decidedBy']:8}  {first[:90]}")
 
-    bad = [(case, result) for case, result in rows if case["expect"] == "reject"]
-    good = [(case, result) for case, result in rows if case["expect"] == "approve"]
-    caught = [(case, result) for case, result in bad if result["status"] == "changes_requested"]
-    by_checks = [case for case, result in caught if result["decidedBy"] == "checks"]
-    approved = [case for case, result in good if result["status"] == "approved"]
-    calls = sum(result["usage"].get("model_calls", 0) for _, result in rows)
+    bad = [row for row in rows if row["case"]["expect"] == "reject"]
+    good = [row for row in rows if row["case"]["expect"] == "approve"]
+    caught = [row for row in bad if row["run"]["status"] == "changes_requested"]
+    metrics = {
+        "cases": len(rows),
+        "bad_caught": round(len(caught) / len(bad), 3) if bad else None,
+        "caught_by_checks": sum(row["run"]["decidedBy"] == "checks" for row in caught),
+        "caught_by_reviewer": sum(row["run"]["decidedBy"] == "reviewer" for row in caught),
+        "good_approved": round(sum(row["run"]["status"] == "approved" for row in good) / len(good), 3) if good else None,
+        "missed": [row["case"]["id"] for row in bad if row["run"]["status"] != "changes_requested"],
+        "false_rejections": [row["case"]["id"] for row in good if row["run"]["status"] != "approved"],
+        "model_calls": sum(row["run"]["usage"].get("model_calls", 0) for row in rows),
+        "total_seconds": round(time.monotonic() - started),
+    }
+    return rows, metrics
 
-    print(f"\nBad changes caught:    {len(caught)}/{len(bad)}  ({len(by_checks)} by the checks, {len(caught) - len(by_checks)} by the reviewer)")
-    print(f"Good changes approved: {len(approved)}/{len(good)}")
-    missed = [case["id"] for case, result in bad if result["status"] != "changes_requested"]
-    rejected = [case["id"] for case, result in good if result["status"] != "approved"]
-    if missed:
-        print(f"Missed:                {', '.join(missed)}")
-    if rejected:
-        print(f"Good but rejected:     {', '.join(rejected)}")
-    print(f"Model calls: {calls} · {round(time.monotonic() - started)}s")
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Measure what the checks and the Reviewer Agent catch.")
+    parser.add_argument("--only", nargs="*", help="Case ids to run.")
+    args = parser.parse_args()
+
+    settings = get_settings()
+    print(f"Reviewing planted changes on {SITE} with {settings.reviewer_model}\n")
+    _, metrics = evaluate(settings.reviewer_model, args.only)
+    print()
+    for name, value in metrics.items():
+        print(f"  {name:20} {value}")

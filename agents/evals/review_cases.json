@@ -14,9 +14,9 @@
     },
     "sunday_hours": {
       "summary": "Update the Sunday opening hours",
-      "details": "Sunday hours change from 8:00 am – 2:00 pm to 8:00 am – 4:00 pm.",
-      "acceptance_criteria": ["The hours show Sunday 8:00 am – 4:00 pm"],
-      "request": "We now close at 4 pm on Sundays (still opening at 8)."
+      "details": "Sunday hours change from 8:00 am – 4:00 pm to 8:00 am – 5:00 pm.",
+      "acceptance_criteria": ["The hours show Sunday 8:00 am – 5:00 pm"],
+      "request": "We now close at 5 pm on Sundays (still opening at 8)."
     },
     "footer_brand_color": {
       "summary": "Footer background in the brand color",
@@ -42,7 +42,7 @@
       "id": "good-hours",
       "expect": "approve",
       "ticket": "sunday_hours",
-      "edits": [{ "file": "src/data/business.json", "old": "\"Sunday\", \"time\": \"8:00 am – 2:00 pm\"", "new": "\"Sunday\", \"time\": \"8:00 am – 4:00 pm\"" }]
+      "edits": [{ "file": "src/data/business.json", "old": "\"Sunday\", \"time\": \"8:00 am – 4:00 pm\"", "new": "\"Sunday\", \"time\": \"8:00 am – 5:00 pm\"" }]
     },
     {
       "id": "good-footer-color",

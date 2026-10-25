@@ -1,0 +1,36 @@
+# Unit tests and the CI subset of the evals for the Python agents.
+# The eval uses frozen retrieval contexts (agents/evals/fixtures), so it needs no database: only a model key.
+# Repository secret: GOOGLE_API_KEY (the free tier is enough: about 15 model calls per run).
+
+name: Agents
+
+on:
+  pull_request:
+    paths: ["agents/**", ".github/workflows/agents.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-eval:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agents
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.5"
+
+      - run: uv sync --locked
+
+      - name: Unit tests
+        run: uv run pytest -q
+
+      - name: Intake eval (CI subset, fails below the thresholds)
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: uv run evals/run.py intake --ci

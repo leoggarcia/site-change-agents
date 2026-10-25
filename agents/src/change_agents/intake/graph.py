@@ -27,7 +27,7 @@ from langgraph.types import interrupt
 
 from change_agents.intake.context import IntakeContext
 from change_agents.intake.prompts import INTAKE_PROMPT, RETRY_PROMPT
-from change_agents.intake.schema import IntakeDecision
+from change_agents.intake.schema import IntakeDecision, decision_schema
 from change_agents.llm import add_usage
 
 MAX_QUESTIONS = 3
@@ -85,7 +85,6 @@ def build_intake_graph(
     checkpointer: BaseCheckpointSaver | None = None,
     max_questions: int = MAX_QUESTIONS,
 ) -> CompiledStateGraph:
-    decider = model.with_structured_output(IntakeDecision, include_raw=True)
 
     def retrieve(state: IntakeState) -> dict:
         query = " ".join([state["request"], *(item["answer"] for item in state["qa"])])
@@ -95,10 +94,13 @@ def build_intake_graph(
         messages = [SystemMessage(INTAKE_PROMPT), HumanMessage(_render(state))]
         if state["error"]:
             messages.append(HumanMessage(RETRY_PROMPT.format(error=state["error"])))
+        routes = state["context"]["routes"]
+        # The schema lists this site's pages, so the model can only pick a real one.
+        decider = model.with_structured_output(decision_schema(tuple(routes)), include_raw=True)
         result = decider.invoke(messages)
 
         decision: IntakeDecision | None = result["parsed"]
-        error = str(result["parsing_error"]) if decision is None else check_rules(decision, state["context"]["routes"])
+        error = str(result["parsing_error"]) if decision is None else check_rules(decision, routes)
         return {
             "decision": decision.model_dump() if decision and not error else None,
             "error": error,
